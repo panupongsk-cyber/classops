@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'panupongs@nu.ac.th';
+    }
+    
+    // Helper function to check if user is teacher
+    function isTeacher() {
+      return request.auth != null && (
+        isAdmin() ||
+        exists(/databases/$(database)/documents/allowed_teachers/$(request.auth.token.email))
+      );
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allowed Teachers (admin only)
+    match /allowed_teachers/{email} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+    
+    // Pending Students (for pre-registration)
+    match /pending_students/{email} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher() || isAdmin();
+    }
+    
+    // Classrooms collection
+    match /classrooms/{classroomId} {
+      allow read: if request.auth != null;
+      allow create: if isTeacher();
+      allow update, delete: if request.auth != null && (
+        resource.data.teacherId == request.auth.uid || isAdmin()
+      );
+    }
+    
+    // Students collection
+    match /students/{studentId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isTeacher();
+    }
+    
+    // Sessions collection
+    match /sessions/{sessionId} {
+      allow read: if request.auth != null;
+      allow create, update: if isTeacher();
+    }
+    
+    // Attendance collection
+    match /attendance/{attendanceId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+    }
+  }
+}
