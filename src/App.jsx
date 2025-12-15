@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminTeachers from './pages/admin/Teachers';
+import AttendanceHistory from './pages/admin/AttendanceHistory';
 
 // Teacher Pages
 import Dashboard from './pages/teacher/Dashboard';
@@ -16,6 +17,7 @@ import Settings from './pages/teacher/Settings';
 // Student Pages
 import ScanPage from './pages/student/ScanPage';
 import History from './pages/student/History';
+import CheckInPage from './pages/student/CheckInPage';
 
 // Protected Route Component
 function ProtectedRoute({ children, allowedRoles }) {
@@ -103,6 +105,12 @@ export default function App() {
                 }
             />
 
+            {/* Check-in Route (Public - handles login internally) */}
+            <Route
+                path="/checkin"
+                element={<CheckInPage />}
+            />
+
             {/* Admin Routes */}
             <Route
                 path="/admin"
@@ -120,6 +128,16 @@ export default function App() {
                     <ProtectedRoute allowedRoles={['admin']}>
                         <AppLayout>
                             <AdminTeachers />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/attendance"
+                element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AppLayout>
+                            <AttendanceHistory />
                         </AppLayout>
                     </ProtectedRoute>
                 }
@@ -170,16 +188,6 @@ export default function App() {
             {/* Student Routes */}
             <Route
                 path="/student"
-                element={
-                    <ProtectedRoute allowedRoles={['student']}>
-                        <AppLayout>
-                            <ScanPage />
-                        </AppLayout>
-                    </ProtectedRoute>
-                }
-            />
-            <Route
-                path="/student/history"
                 element={
                     <ProtectedRoute allowedRoles={['student']}>
                         <AppLayout>

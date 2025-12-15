@@ -102,9 +102,9 @@ export default function History() {
                                 <polyline points="12 6 12 12 16 14" />
                             </svg>
                             <p>ยังไม่มีประวัติการเช็คชื่อ</p>
-                            <a href="/student" className="btn btn-primary mt-md">
-                                ไป Scan QR Code
-                            </a>
+                            <p className="text-muted" style={{ fontSize: '0.9rem' }}>
+                                Scan QR Code ที่อาจารย์แสดงเพื่อเช็คชื่อ
+                            </p>
                         </div>
                     ) : (
                         <div className="flex flex-col gap-sm">

@@ -133,15 +133,16 @@ export const AuthProvider = ({ children }) => {
                     console.error('⚠️ Error checking student:', e);
                 }
 
-                // Not authorized
-                console.log('❌ User NOT FOUND in system');
-                setAuthError('ไม่พบรายชื่อในระบบ กรุณาติดต่อผู้ดูแลระบบ');
-                setUser(null);
-                setUserRole(null);
+                // Not found in students collection - set as pending (let check-in validate)
+                console.log('⚠️ User not pre-registered, allowing as pending');
+                setUserRole('student'); // Treat as student, let server validate
+                setUser({
+                    ...firebaseUser,
+                    role: 'student',
+                    registered: false
+                });
+                setAuthError(null);
                 setLoading(false);
-
-                // Sign out in background
-                signOut(auth).catch(e => console.error('Sign out error:', e));
 
             } else {
                 console.log('🔐 No user logged in');

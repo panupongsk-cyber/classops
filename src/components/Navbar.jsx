@@ -102,10 +102,9 @@ export default function Navbar() {
         { path: '/teacher/settings', icon: <SettingsIcon />, label: 'ตั้งค่า' },
     ];
 
-    // Student navigation items
+    // Student navigation items (only history - scan via QR URL)
     const studentNavItems = [
-        { path: '/student', icon: <ScanIcon />, label: 'Scan', exact: true },
-        { path: '/student/history', icon: <HistoryIcon />, label: 'ประวัติ' },
+        { path: '/student', icon: <HistoryIcon />, label: 'ประวัติ', exact: true },
     ];
 
     // Select nav items based on role

@@ -58,6 +58,13 @@ service cloud.firestore {
     match /attendance/{attendanceId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
+      allow delete: if isAdmin();
+    }
+    
+    // Config collection (admin only for write)
+    match /config/{configId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
     }
   }
 }

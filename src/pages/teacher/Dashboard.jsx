@@ -7,7 +7,13 @@ import {
     createSession,
     endSession,
     subscribeToAttendance,
-    getStudents
+    subscribeToSession,
+    getStudents,
+    getAdminConfig,
+    DEFAULT_CHECKIN_RADIUS,
+    DEFAULT_QR_INTERVAL,
+    DEFAULT_GRACE_PERIOD,
+    DEFAULT_REQUIRE_GPS
 } from '../../firebase/firestore';
 import QRGenerator from '../../components/QRGenerator';
 import AttendanceList from '../../components/AttendanceList';
@@ -63,36 +69,77 @@ export default function Dashboard() {
         loadSessionData();
     }, [selectedClassroom?.id]);
 
-    // Subscribe to attendance updates
+    // Subscribe to attendance updates (real-time)
     useEffect(() => {
         if (!session?.id) {
+            console.log('📡 No session ID, clearing attendance');
             setAttendance([]);
             return;
         }
 
+        console.log('📡 Setting up attendance subscription for session:', session.id);
         const unsubscribe = subscribeToAttendance(session.id, (data) => {
+            console.log('📡 Attendance data received:', data.length, 'records');
             setAttendance(data);
         });
 
-        return () => unsubscribe();
+        return () => {
+            console.log('📡 Cleaning up attendance subscription');
+            unsubscribe();
+        };
     }, [session?.id]);
 
     const handleStartSession = async () => {
         if (!selectedClassroom) return;
 
         try {
-            const qrInterval = selectedClassroom.qrInterval || 30;
-            const newSession = await createSession(selectedClassroom.id, qrInterval);
+            // Get admin config for check-in radius
+            const config = await getAdminConfig();
+            const checkInRadius = config.checkInRadius || DEFAULT_CHECKIN_RADIUS;
+
+            // Get teacher's GPS location
+            let location = null;
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    });
+                });
+                location = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                };
+                console.log('📍 Teacher location:', location);
+            } catch (gpsError) {
+                console.warn('⚠️ Could not get GPS location:', gpsError.message);
+                // Continue without GPS - session will not require location check
+                alert('ไม่สามารถเข้าถึงตำแหน่ง GPS ได้ การเช็คชื่อจะไม่ตรวจสอบตำแหน่ง');
+            }
+
+            // Use qrInterval and gracePeriod from admin config
+            const qrInterval = config.qrInterval || DEFAULT_QR_INTERVAL;
+            const gracePeriod = config.gracePeriod || DEFAULT_GRACE_PERIOD;
+            // Default to true if not present, false if strictly false
+            const requireGPS = config.requireGPS !== false;
+
+            const newSession = await createSession(selectedClassroom.id, qrInterval, location, checkInRadius, gracePeriod, requireGPS);
             setSession({
                 id: newSession.id,
                 classroomId: selectedClassroom.id,
                 activeToken: newSession.token,
+                activeEmoji: newSession.emojiSequence,
                 tokenExpiry: newSession.expiry,
                 isActive: true,
-                qrInterval
+                qrInterval,
+                gracePeriod,
+                location,
+                checkInRadius
             });
         } catch (error) {
             console.error('Failed to start session:', error);
+            alert('ไม่สามารถเริ่มเซสชั่นได้: ' + error.message);
         }
     };
 
