@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
     getAllowedTeachers,
     addAllowedTeacher,
-    removeAllowedTeacher
+    removeAllowedTeacher,
+    updateUserRole
 } from '../../firebase/firestore';
 import Modal, { ConfirmModal } from '../../components/Modal';
 
@@ -189,8 +190,8 @@ export default function AdminTeachers() {
         <div className="page container">
             <div className="flex justify-between items-center mb-lg">
                 <div>
-                    <h1 style={{ marginBottom: '0.25rem' }}>จัดการอาจารย์</h1>
-                    <p className="text-muted">เพิ่มหรือลบอาจารย์ที่สามารถเข้าใช้งานระบบ</p>
+                    <h1 style={{ marginBottom: '0.25rem' }}>จัดการผู้ใช้งาน</h1>
+                    <p className="text-muted">เพิ่มหรือลบอาจารย์/admin ที่สามารถเข้าใช้งานระบบ</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
                     <PlusIcon />
@@ -237,6 +238,7 @@ export default function AdminTeachers() {
                                 <tr>
                                     <th>ชื่อ</th>
                                     <th>Email</th>
+                                    <th>Role</th>
                                     <th style={{ width: '80px' }}></th>
                                 </tr>
                             </thead>
@@ -248,6 +250,38 @@ export default function AdminTeachers() {
                                             {teacher.pending && <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>(กำลังบันทึก)</span>}
                                         </td>
                                         <td>{teacher.email}</td>
+                                        <td>
+                                            <select
+                                                className="form-input"
+                                                value={teacher.role || 'teacher'}
+                                                onChange={(e) => {
+                                                    const newRole = e.target.value;
+                                                    // Optimistic update
+                                                    setTeachers(prev => prev.map(t =>
+                                                        t.id === teacher.id ? { ...t, role: newRole } : t
+                                                    ));
+                                                    setStatus('กำลังบันทึก...');
+                                                    updateUserRole(teacher.email, newRole)
+                                                        .then(() => {
+                                                            setStatus('เปลี่ยน role สำเร็จ!');
+                                                            setTimeout(() => setStatus(''), 2000);
+                                                        })
+                                                        .catch(err => {
+                                                            setStatus('เกิดข้อผิดพลาด');
+                                                            loadTeachers();
+                                                        });
+                                                }}
+                                                style={{
+                                                    padding: '0.25rem 0.5rem',
+                                                    fontSize: '0.85rem',
+                                                    minWidth: '100px'
+                                                }}
+                                                disabled={teacher.pending}
+                                            >
+                                                <option value="teacher">Teacher</option>
+                                                <option value="admin">Admin</option>
+                                            </select>
+                                        </td>
                                         <td>
                                             <button
                                                 className="btn btn-danger btn-sm"

@@ -13,7 +13,10 @@ const GoogleIcon = () => (
 
 export default function LoginPage() {
     const [loading, setLoading] = useState(false);
-    const { signInWithGoogle, authError, clearError } = useAuth();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [showEmailLogin, setShowEmailLogin] = useState(false);
+    const { signInWithGoogle, signInWithEmail, authError, clearError } = useAuth();
     const navigate = useNavigate();
 
     const handleGoogleSignIn = async () => {
@@ -35,11 +38,50 @@ export default function LoginPage() {
         }
     };
 
+    const handleEmailSignIn = async (e) => {
+        e?.preventDefault();
+        if (!email || !password) return;
+
+        clearError();
+        setLoading(true);
+
+        try {
+            await signInWithEmail(email, password);
+        } catch (err) {
+            console.error('Email sign-in error:', err);
+            if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                alert('รหัสผ่านไม่ถูกต้อง');
+            } else if (err.code === 'auth/invalid-email') {
+                alert('รูปแบบ Email ไม่ถูกต้อง');
+            } else {
+                alert('เข้าสู่ระบบไม่สำเร็จ: ' + (err.message || err.code));
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleTestLogin = async (testEmail, testPassword) => {
+        setEmail(testEmail);
+        setPassword(testPassword);
+        clearError();
+        setLoading(true);
+
+        try {
+            await signInWithEmail(testEmail, testPassword);
+        } catch (err) {
+            console.error('Test login error:', err);
+            alert('เข้าสู่ระบบไม่สำเร็จ: ' + (err.message || err.code));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
             <div className="card" style={{ maxWidth: '420px', width: '100%' }}>
                 <div className="text-center mb-lg">
-                    <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Attendance</h1>
+                    <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>ClassOps</h1>
                     <p className="text-muted">ระบบเช็คชื่อด้วย QR Code</p>
                 </div>
 
@@ -75,6 +117,86 @@ export default function LoginPage() {
                     <GoogleIcon />
                     {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบด้วย Google'}
                 </button>
+
+                {/* Divider */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    margin: 'var(--space-lg) 0',
+                    gap: 'var(--space-md)'
+                }}>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }} />
+                    <span className="text-muted" style={{ fontSize: '0.85rem' }}>หรือ</span>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }} />
+                </div>
+
+                {/* Email/Password Section */}
+                {!showEmailLogin ? (
+                    <button
+                        onClick={() => setShowEmailLogin(true)}
+                        className="btn btn-secondary w-full"
+                    >
+                        📧 เข้าสู่ระบบด้วย Email
+                    </button>
+                ) : (
+                    <form onSubmit={handleEmailSignIn}>
+                        <div className="form-group">
+                            <input
+                                type="email"
+                                className="form-input"
+                                placeholder="Email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <input
+                                type="password"
+                                className="form-input"
+                                placeholder="Password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            className="btn btn-primary w-full"
+                            disabled={loading || !email || !password}
+                        >
+                            {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+                        </button>
+                    </form>
+                )}
+
+                {/* Test Accounts (Dev Mode) */}
+                {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                    <div style={{ marginTop: 'var(--space-lg)', paddingTop: 'var(--space-lg)', borderTop: '1px solid var(--border-color)' }}>
+                        <p className="text-muted text-center" style={{ fontSize: '0.8rem', marginBottom: 'var(--space-md)' }}>
+                            🧪 Test Accounts (Dev Only)
+                        </p>
+                        <div className="flex gap-sm">
+                            <button
+                                onClick={() => handleTestLogin('teacher@test.com', 'test1234')}
+                                className="btn btn-secondary"
+                                style={{ flex: 1, fontSize: '0.8rem', padding: '0.5rem' }}
+                                disabled={loading}
+                            >
+                                👨‍🏫 Teacher
+                            </button>
+                            <button
+                                onClick={() => handleTestLogin('student@test.com', 'test1234')}
+                                className="btn btn-secondary"
+                                style={{ flex: 1, fontSize: '0.8rem', padding: '0.5rem' }}
+                                disabled={loading}
+                            >
+                                👨‍🎓 Student
+                            </button>
+                        </div>
+                        <p className="text-muted text-center" style={{ fontSize: '0.7rem', marginTop: 'var(--space-sm)' }}>
+                            ⚠️ ต้องเปิด Email/Password ใน Firebase Console ก่อน
+                        </p>
+                    </div>
+                )}
 
                 <div className="text-center mt-lg">
                     <p className="text-muted" style={{ fontSize: '0.85rem' }}>

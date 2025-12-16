@@ -13,7 +13,7 @@ export default function Settings() {
         const loadClassrooms = async () => {
             if (!user?.uid) return;
             try {
-                const data = await getClassrooms(user.uid);
+                const data = await getClassrooms(user.uid, user.email);
                 setClassrooms(data);
             } catch (error) {
                 console.error('Failed to load classrooms:', error);

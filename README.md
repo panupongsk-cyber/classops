@@ -1,86 +1,51 @@
-# Attendance QR Code System
+# ClassOps - Attendance Management System
 
-ระบบเช็คชื่อผู้เรียนด้วย QR Code แบบใช้ครั้งเดียว (One-Time QR Code)
+## Version 1.0.0 (December 2024)
 
-## Features
+ระบบเช็คชื่อเข้าเรียนด้วย QR Code พร้อมระบบจัดการคะแนนสำหรับมหาวิทยาลัย
 
-- 🔐 **One-Time QR Code**: QR Code หมดอายุอัตโนมัติและใช้ได้ครั้งเดียวต่อนักศึกษา
-- ⏱️ **Configurable Refresh**: ตั้งค่าระยะเวลารีเฟรช QR ได้ (10-120 วินาที)
-- 📚 **Classroom Management**: สร้างและจัดการรายวิชา
-- 👨‍🎓 **Student Registration**: ลงทะเบียนนักศึกษาด้วย Email
-- 📱 **Mobile-Friendly**: ออกแบบสำหรับใช้งานบนมือถือ
-- ⚡ **Real-time Updates**: อัพเดทรายชื่อผู้เข้าเรียนแบบ Real-time
+🌐 **Live:** https://attendance-13d17.web.app
 
-## Getting Started
+---
 
-### 1. ติดตั้ง Dependencies
+## ✨ Features
 
-```bash
-cd attendance
-npm install
-```
+### สำหรับผู้ดูแลระบบ (Admin)
+- ✅ จัดการอาจารย์ (เพิ่ม/ลบ)
+- ✅ ดูประวัติการเช็คชื่อทั้งระบบ
+- ✅ ลบ session ใดก็ได้
 
-### 2. ตั้งค่า Firebase
+### สำหรับอาจารย์ (Teacher)
+- ✅ สร้าง/จัดการคลาสเรียน (รองรับหลายอาจารย์ต่อคลาส)
+- ✅ จัดการรายชื่อนักศึกษา (เรียงตามชื่อ/รหัส)
+- ✅ เปิด Session เช็คชื่อด้วย QR Code + Emoji Challenge + GPS
+- ✅ สุ่มเลือกนักศึกษา (Random Name Picker)
+- ✅ เพิ่ม/แก้ไขการเช็คชื่อหลัง Session (Manual Check-in/Leave)
+- ✅ ระบบคะแนน (Grades) พร้อม Feedback และ Export CSV
+- ✅ **Exit Ticket** - รับ feedback จากนักศึกษาหลังเรียน
+  - เปิดอัตโนมัติเมื่อเริ่ม session
+  - หมดเวลาใน 24 ชั่วโมง หรืออาจารย์ปิดก่อนได้
+  - ดูสถิติ (avg rating, distribution) + Export CSV
 
-1. ไปที่ [Firebase Console](https://console.firebase.google.com/)
-2. สร้างโปรเจคใหม่
-3. เปิดใช้งาน:
-   - **Authentication** → Email/Password
-   - **Firestore Database**
-4. ไปที่ Project Settings → General → Your apps → เพิ่ม Web app
-5. Copy config ไปใส่ใน `src/firebase/config.js`:
+### สำหรับนักศึกษา (Student)
+- ✅ Scan QR เช็คชื่อ + Emoji Challenge
+- ✅ ดูประวัติการเช็คชื่อ
+- ✅ ดูคะแนน + feedback จากอาจารย์
+- ✅ **ส่ง Exit Ticket** - ให้คะแนน 1-10 + ระบุเหตุผล + Key Takeaway
 
-```javascript
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-```
+---
 
-### 3. รันโปรเจค
+## 🛠️ Tech Stack
+- **Frontend:** React + Vite
+- **Backend:** Firebase (Auth, Firestore)
+- **Hosting:** Firebase Hosting
 
-```bash
-npm run dev
-```
+---
 
-เปิด http://localhost:5173
+## 📝 Changelog
 
-## การใช้งาน
-
-### สำหรับอาจารย์
-
-1. สมัครสมาชิกเลือก "อาจารย์"
-2. ไปที่ **รายวิชา** → สร้างรายวิชาใหม่
-3. ไปที่ **นักศึกษา** → เพิ่มนักศึกษา (ด้วย Email)
-4. ไปที่ **ตั้งค่า** → ปรับระยะเวลา QR (ถ้าต้องการ)
-5. ไปที่ **Dashboard** → กด "เริ่มเช็คชื่อ"
-
-### สำหรับนักศึกษา
-
-1. สมัครสมาชิกด้วย Email ที่อาจารย์ลงทะเบียนไว้
-2. ไปที่ **Scan** → Scan QR Code ที่อาจารย์แสดง
-3. ดูประวัติได้ที่ **ประวัติ**
-
-## Deployment (Firebase Hosting)
-
-```bash
-# Build
-npm run build
-
-# Login Firebase
-firebase login
-
-# Deploy
-firebase deploy
-```
-
-## Tech Stack
-
-- **Frontend**: React + Vite
-- **Backend**: Firebase (Auth, Firestore)
-- **Hosting**: Firebase Hosting
-- **Libraries**: qrcode.react, html5-qrcode
+### v1.0.0 (2024-12-17)
+- Initial stable release
+- Exit Ticket feature with hybrid UX (notification + history page)
+- Auto-enabled exit ticket with 24hr deadline
+- Multiple fixes for Firestore rules and queries

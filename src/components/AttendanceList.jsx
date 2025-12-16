@@ -1,4 +1,13 @@
-export default function AttendanceList({ attendance = [], showEmpty = true }) {
+import { useState } from 'react';
+
+export default function AttendanceList({
+    attendance = [],
+    showEmpty = true,
+    showSortControl = false,
+    defaultSortBy = 'time' // 'name', 'studentId', 'time'
+}) {
+    const [sortBy, setSortBy] = useState(defaultSortBy);
+
     const formatTime = (timestamp) => {
         if (!timestamp) return '-';
         const date = timestamp.toDate?.() || new Date(timestamp);
@@ -12,6 +21,33 @@ export default function AttendanceList({ attendance = [], showEmpty = true }) {
         if (!name) return '?';
         return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     };
+
+    const getBadgeInfo = (type) => {
+        switch (type) {
+            case 'manual':
+                return { text: '✎ เช็คโดยอาจารย์', color: 'var(--primary)' };
+            case 'leave':
+                return { text: '📝 ลา', color: 'var(--warning)' };
+            case 'scan':
+            default:
+                return { text: '✓ เข้าเรียน', color: 'var(--success)' };
+        }
+    };
+
+    // Sort attendance list
+    const sortedAttendance = [...attendance].sort((a, b) => {
+        switch (sortBy) {
+            case 'name':
+                return (a.studentName || '').localeCompare(b.studentName || '', 'th');
+            case 'studentId':
+                return (a.studentId || '').localeCompare(b.studentId || '');
+            case 'time':
+            default:
+                const timeA = a.checkedAt?.toDate?.() || new Date(a.checkedAt || 0);
+                const timeB = b.checkedAt?.toDate?.() || new Date(b.checkedAt || 0);
+                return timeA - timeB;
+        }
+    });
 
     if (attendance.length === 0 && showEmpty) {
         return (
@@ -28,21 +64,58 @@ export default function AttendanceList({ attendance = [], showEmpty = true }) {
     }
 
     return (
-        <div className="attendance-list">
-            {attendance.map((item, index) => (
-                <div key={item.id || index} className="attendance-item">
-                    <div className="attendance-avatar">
-                        {getInitials(item.studentName)}
+        <div className="attendance-list-wrapper">
+            {/* Sort Control */}
+            {showSortControl && attendance.length > 0 && (
+                <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-sm)' }}>
+                    <span className="text-muted" style={{ fontSize: '0.85rem' }}>
+                        {attendance.length} คน
+                    </span>
+                    <div className="flex gap-sm items-center">
+                        <label style={{ fontSize: '0.85rem' }}>เรียงตาม:</label>
+                        <select
+                            className="form-input form-select"
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            style={{ width: 'auto', minWidth: '100px', padding: '0.3rem 0.5rem' }}
+                        >
+                            <option value="time">เวลา</option>
+                            <option value="name">ชื่อ</option>
+                            <option value="studentId">รหัสนิสิต</option>
+                        </select>
                     </div>
-                    <div className="attendance-info">
-                        <div className="attendance-name">{item.studentName}</div>
-                        <div className="attendance-time">
-                            {item.studentId} • {formatTime(item.checkedAt)}
-                        </div>
-                    </div>
-                    <span className="attendance-badge">✓ เข้าเรียน</span>
                 </div>
-            ))}
+            )}
+
+            <div className="attendance-list">
+                {sortedAttendance.map((item, index) => {
+                    const badge = getBadgeInfo(item.type);
+                    return (
+                        <div key={item.id || index} className="attendance-item">
+                            <div className="attendance-avatar">
+                                {getInitials(item.studentName)}
+                            </div>
+                            <div className="attendance-info">
+                                <div className="attendance-name">{item.studentName}</div>
+                                <div className="attendance-time">
+                                    {item.studentId} • {formatTime(item.checkedAt)}
+                                    {item.type === 'leave' && item.leaveReason && (
+                                        <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
+                                            ({item.leaveReason})
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            <span
+                                className="attendance-badge"
+                                style={{ background: badge.color }}
+                            >
+                                {badge.text}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }

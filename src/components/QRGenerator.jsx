@@ -151,9 +151,7 @@ export default function QRGenerator({ session, qrInterval = 30 }) {
                 <span>รีเฟรชใน {formatTime(timeLeft)}</span>
             </div>
 
-            <p className="text-muted mt-md" style={{ fontSize: '0.85rem' }}>
-                รหัสและ QR จะเปลี่ยนทุก {qrInterval} วินาที
-            </p>
+
         </div>
     );
 }

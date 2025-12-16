@@ -59,6 +59,15 @@ const HistoryIcon = () => (
     </svg>
 );
 
+// Bar chart icon for Grades pages
+const GradesIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" x2="18" y1="20" y2="10" />
+        <line x1="12" x2="12" y1="20" y2="4" />
+        <line x1="6" x2="6" y1="20" y2="14" />
+    </svg>
+);
+
 const LogoutIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -74,7 +83,7 @@ const ShieldIcon = () => (
 );
 
 export default function Navbar() {
-    const { user, userRole, logout } = useAuth();
+    const { user, userRole, activeRole, switchRole, canSwitchRole, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -92,6 +101,8 @@ export default function Navbar() {
         { path: '/teacher', icon: <DashboardIcon />, label: 'เช็คชื่อ', exact: true },
         { path: '/teacher/classrooms', icon: <ClassroomIcon />, label: 'รายวิชา' },
         { path: '/teacher/students', icon: <UsersIcon />, label: 'นักศึกษา' },
+        { path: '/teacher/grades', icon: <GradesIcon />, label: 'คะแนน' },
+        { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'สถิติ' },
     ];
 
     // Teacher navigation items
@@ -99,12 +110,15 @@ export default function Navbar() {
         { path: '/teacher', icon: <DashboardIcon />, label: 'Dashboard', exact: true },
         { path: '/teacher/classrooms', icon: <ClassroomIcon />, label: 'รายวิชา' },
         { path: '/teacher/students', icon: <UsersIcon />, label: 'นักศึกษา' },
+        { path: '/teacher/grades', icon: <GradesIcon />, label: 'คะแนน' },
+        { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'สถิติ' },
         { path: '/teacher/settings', icon: <SettingsIcon />, label: 'ตั้งค่า' },
     ];
 
-    // Student navigation items (only history - scan via QR URL)
+    // Student navigation items
     const studentNavItems = [
         { path: '/student', icon: <HistoryIcon />, label: 'ประวัติ', exact: true },
+        { path: '/student/grades', icon: <GradesIcon />, label: 'คะแนน' },
     ];
 
     // Select nav items based on role
@@ -123,8 +137,31 @@ export default function Navbar() {
 
     // Get role badge
     const getRoleBadge = () => {
-        if (userRole === 'admin') return <span style={{ fontSize: '0.75rem', background: 'var(--error)', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)', marginLeft: '0.5rem' }}>Admin</span>;
+        if (userRole === 'admin') {
+            return (
+                <span style={{
+                    fontSize: '0.75rem',
+                    background: activeRole === 'admin' ? 'var(--error)' : 'var(--primary)',
+                    padding: '0.1rem 0.4rem',
+                    borderRadius: 'var(--radius-full)',
+                    marginLeft: '0.5rem'
+                }}>
+                    {activeRole === 'admin' ? 'Admin' : 'Teacher View'}
+                </span>
+            );
+        }
         return null;
+    };
+
+    // Handle role switch
+    const handleRoleSwitch = () => {
+        if (activeRole === 'admin') {
+            switchRole('teacher');
+            navigate('/teacher');
+        } else {
+            switchRole('admin');
+            navigate('/admin');
+        }
     };
 
     if (!user) return null;
@@ -134,7 +171,7 @@ export default function Navbar() {
             <div className="container navbar-content">
                 <Link to={homePath} className="navbar-brand">
                     {userRole === 'admin' ? <ShieldIcon /> : <QRIcon />}
-                    <span>Attendance</span>
+                    <span>ClassOps</span>
                     {getRoleBadge()}
                 </Link>
 
@@ -149,6 +186,59 @@ export default function Navbar() {
                             <span>{item.label}</span>
                         </Link>
                     ))}
+
+                    {/* Role Switch Button (Admin only) */}
+                    {canSwitchRole && (
+                        <button
+                            onClick={handleRoleSwitch}
+                            className="nav-link"
+                            style={{
+                                background: 'none',
+                                border: '1px solid var(--border-color)',
+                                cursor: 'pointer',
+                                borderRadius: 'var(--radius-md)',
+                                padding: '0.4rem 0.8rem'
+                            }}
+                            title={activeRole === 'admin' ? 'Switch to Teacher View' : 'Switch to Admin View'}
+                        >
+                            🔄
+                            <span>{activeRole === 'admin' ? 'Teacher' : 'Admin'}</span>
+                        </button>
+                    )}
+
+                    {/* User Info */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--space-sm)',
+                        padding: '0.4rem 0.8rem',
+                        background: 'var(--bg-glass)',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: '0.85rem'
+                    }}>
+                        {user?.photoURL ? (
+                            <img
+                                src={user.photoURL}
+                                alt=""
+                                style={{
+                                    width: '24px',
+                                    height: '24px',
+                                    borderRadius: '50%',
+                                    objectFit: 'cover'
+                                }}
+                            />
+                        ) : (
+                            <span style={{ fontSize: '1rem' }}>👤</span>
+                        )}
+                        <span style={{
+                            maxWidth: '120px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                        }}>
+                            {user?.displayName || user?.email?.split('@')[0] || 'User'}
+                        </span>
+                    </div>
 
                     <button onClick={handleLogout} className="nav-link" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                         <LogoutIcon />

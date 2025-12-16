@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { getClassrooms, getAllClassrooms, createClassroom, updateClassroom, deleteClassroom } from '../../firebase/firestore';
+import { getClassrooms, getAllClassrooms, createClassroom, updateClassroom, deleteClassroom, getAllowedTeachers } from '../../firebase/firestore';
 import { ClassroomModal, ConfirmModal } from '../../components/Modal';
 
 const PlusIcon = () => (
@@ -27,6 +27,7 @@ const TrashIcon = () => (
 export default function Classrooms() {
     const { user, userRole } = useAuth();
     const [classrooms, setClassrooms] = useState([]);
+    const [teachers, setTeachers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingClassroom, setEditingClassroom] = useState(null);
@@ -39,7 +40,7 @@ export default function Classrooms() {
                 // Admin sees all classrooms, teacher sees only their own
                 const data = userRole === 'admin'
                     ? await getAllClassrooms()
-                    : await getClassrooms(user.uid);
+                    : await getClassrooms(user.uid, user.email);
                 setClassrooms(data);
             } catch (error) {
                 console.error('Failed to load classrooms:', error);
@@ -48,11 +49,16 @@ export default function Classrooms() {
             }
         };
         loadClassrooms();
+
+        // Load teachers list (for admin to assign)
+        if (userRole === 'admin') {
+            getAllowedTeachers().then(setTeachers).catch(console.error);
+        }
     }, [user?.uid, userRole]);
 
     const handleCreate = async (data) => {
         const id = await createClassroom(user.uid, user.email, data);
-        setClassrooms(prev => [{ id, ...data, qrInterval: 30, teacherEmails: [user.email] }, ...prev]);
+        setClassrooms(prev => [{ id, ...data, teacherEmails: [user.email] }, ...prev]);
     };
 
     const handleEdit = async (data) => {
@@ -64,9 +70,15 @@ export default function Classrooms() {
     };
 
     const handleDelete = async () => {
-        await deleteClassroom(deleteTarget.id);
-        setClassrooms(prev => prev.filter(c => c.id !== deleteTarget.id));
-        setDeleteTarget(null);
+        try {
+            await deleteClassroom(deleteTarget.id);
+            setClassrooms(prev => prev.filter(c => c.id !== deleteTarget.id));
+            setDeleteTarget(null);
+        } catch (error) {
+            console.error('Delete failed:', error);
+            alert('ลบไม่สำเร็จ: ' + (error.message || error.code || 'Unknown error'));
+            setDeleteTarget(null);
+        }
     };
 
     if (loading) {
@@ -159,6 +171,7 @@ export default function Classrooms() {
                     }}
                     onSubmit={editingClassroom ? handleEdit : handleCreate}
                     classroom={editingClassroom}
+                    teachers={teachers}
                 />
 
                 {/* Delete Confirmation */}

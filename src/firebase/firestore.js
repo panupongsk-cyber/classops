@@ -107,6 +107,22 @@ export const removeAllowedTeacher = async (email) => {
     }
 };
 
+// Update user role
+export const updateUserRole = async (email, newRole) => {
+    console.log('📝 updateUserRole:', { email, newRole });
+    const docRef = doc(db, 'allowed_teachers', email.toLowerCase());
+    try {
+        await updateDoc(docRef, {
+            role: newRole,
+            updatedAt: serverTimestamp()
+        });
+        console.log('📝 updateUserRole: Success');
+    } catch (error) {
+        console.error('📝 updateUserRole: Failed', error);
+        throw error;
+    }
+};
+
 export const getAllowedTeachers = async () => {
     console.log('📚 getAllowedTeachers: Starting...');
     try {
@@ -155,18 +171,49 @@ export const createClassroom = async (teacherId, teacherEmail, data) => {
     return docRef.id;
 };
 
-// Get classrooms for a teacher (uses array-contains)
-export const getClassrooms = async (teacherId) => {
-    console.log('📚 getClassrooms: Loading for teacher', teacherId);
-    const q = query(
-        collection(db, 'classrooms'),
-        where('teacherIds', 'array-contains', teacherId),
-        orderBy('createdAt', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    const classrooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log('📚 getClassrooms: Found', classrooms.length);
-    return classrooms;
+// Get classrooms for a teacher (uses array-contains on teacherIds or teacherEmails)
+export const getClassrooms = async (teacherId, teacherEmail = null) => {
+    console.log('📚 getClassrooms: Loading for teacher', teacherId, teacherEmail);
+    try {
+        // First try by teacherIds (UID)
+        const q1 = query(
+            collection(db, 'classrooms'),
+            where('teacherIds', 'array-contains', teacherId)
+        );
+        const snapshot1 = await getDocs(q1);
+        let classrooms = snapshot1.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Also check by email if provided
+        if (teacherEmail) {
+            const q2 = query(
+                collection(db, 'classrooms'),
+                where('teacherEmails', 'array-contains', teacherEmail.toLowerCase())
+            );
+            const snapshot2 = await getDocs(q2);
+            const emailClassrooms = snapshot2.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Merge and deduplicate
+            const existingIds = new Set(classrooms.map(c => c.id));
+            for (const c of emailClassrooms) {
+                if (!existingIds.has(c.id)) {
+                    classrooms.push(c);
+                }
+            }
+        }
+
+        // Sort client-side by createdAt descending
+        classrooms.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date(0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date(0);
+            return dateB - dateA;
+        });
+
+        console.log('📚 getClassrooms: Found', classrooms.length);
+        return classrooms;
+    } catch (error) {
+        console.error('📚 getClassrooms: Error', error);
+        return [];
+    }
 };
 
 // Get all classrooms (for admin)
@@ -385,6 +432,9 @@ export const createSession = async (classroomId, qrInterval, location = null, ch
     const emojiSequence = generateEmojiSequence();
     const expiry = Timestamp.fromDate(new Date(Date.now() + qrInterval * 1000));
 
+    // Exit ticket deadline: 24 hours from now
+    const exitTicketDeadline = Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
     const sessionData = {
         classroomId,
         activeToken: token,
@@ -394,7 +444,11 @@ export const createSession = async (classroomId, qrInterval, location = null, ch
         gracePeriod,
         requireGPS,
         isActive: true,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        // Exit ticket auto-enabled
+        exitTicketEnabled: true,
+        exitTicketDeadline,
+        exitTicketClosedManually: false
     };
 
     // Add GPS location if provided
@@ -462,6 +516,19 @@ export const endSession = async (sessionId) => {
     });
 };
 
+// Update session location (for updating GPS from teacher's phone)
+export const updateSessionLocation = async (sessionId, location, checkInRadius = DEFAULT_CHECKIN_RADIUS) => {
+    const docRef = doc(db, 'sessions', sessionId);
+    await updateDoc(docRef, {
+        location: {
+            latitude: location.latitude,
+            longitude: location.longitude
+        },
+        checkInRadius,
+        locationUpdatedAt: serverTimestamp()
+    });
+};
+
 export const subscribeToSession = (sessionId, callback) => {
     const docRef = doc(db, 'sessions', sessionId);
     return onSnapshot(docRef, (doc) => {
@@ -488,6 +555,7 @@ export const recordAttendance = async (sessionId, studentData, token, classroomN
         studentId: studentData.studentId,
         studentName: studentData.name,
         classroomName: classroomName,
+        type: 'scan', // QR/Emoji scan
         tokenUsed: token,
         userAgent: metadata.userAgent || '',
         ipAddress: metadata.ipAddress || '',
@@ -495,6 +563,47 @@ export const recordAttendance = async (sessionId, studentData, token, classroomN
         checkedAt: serverTimestamp()
     });
 
+    return docRef.id;
+};
+
+// Manual check-in by teacher
+export const manualCheckIn = async (sessionId, studentData, classroomName = '', teacherEmail = '') => {
+    const existing = await getAttendanceByEmail(sessionId, studentData.email);
+    if (existing) {
+        throw new Error('นิสิตได้เช็คชื่อแล้วสำหรับคาบนี้');
+    }
+
+    const docRef = await addDoc(collection(db, 'attendance'), {
+        sessionId,
+        studentEmail: studentData.email,
+        studentId: studentData.studentId,
+        studentName: studentData.name,
+        classroomName,
+        type: 'manual',
+        checkedBy: teacherEmail,
+        checkedAt: serverTimestamp()
+    });
+    return docRef.id;
+};
+
+// Record leave
+export const recordLeave = async (sessionId, studentData, classroomName = '', reason = '', teacherEmail = '') => {
+    const existing = await getAttendanceByEmail(sessionId, studentData.email);
+    if (existing) {
+        throw new Error('นิสิตได้เช็คชื่อ/ลาแล้วสำหรับคาบนี้');
+    }
+
+    const docRef = await addDoc(collection(db, 'attendance'), {
+        sessionId,
+        studentEmail: studentData.email,
+        studentId: studentData.studentId,
+        studentName: studentData.name,
+        classroomName,
+        type: 'leave',
+        leaveReason: reason,
+        recordedBy: teacherEmail,
+        checkedAt: serverTimestamp()
+    });
     return docRef.id;
 };
 
@@ -599,10 +708,79 @@ export const getAllSessions = async (limit = 50) => {
     return sessions;
 };
 
+// Get sessions for a specific classroom with attendance counts
+export const getSessionsForClassroom = async (classroomId, limit = 50) => {
+    console.log('📚 getSessionsForClassroom:', classroomId);
+    try {
+        // Query without orderBy to avoid composite index requirement
+        const q = query(
+            collection(db, 'sessions'),
+            where('classroomId', '==', classroomId)
+        );
+        const snapshot = await getDocs(q);
+        const sessions = [];
+
+        for (const sessionDoc of snapshot.docs) {
+            const session = { id: sessionDoc.id, ...sessionDoc.data() };
+
+            // Get attendance count
+            const attendanceQuery = query(
+                collection(db, 'attendance'),
+                where('sessionId', '==', sessionDoc.id)
+            );
+            const attendanceSnapshot = await getDocs(attendanceQuery);
+            session.attendanceCount = attendanceSnapshot.size;
+
+            sessions.push(session);
+        }
+
+        // Sort client-side by createdAt descending
+        sessions.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date(0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date(0);
+            return dateB - dateA;
+        });
+
+        // Apply limit after sorting
+        const limitedSessions = sessions.slice(0, limit);
+
+        console.log('📚 getSessionsForClassroom: Found', limitedSessions.length, 'sessions');
+        return limitedSessions;
+    } catch (error) {
+        console.error('📚 getSessionsForClassroom: Error', error);
+        return [];
+    }
+};
+
 // Delete attendance record
 export const deleteAttendance = async (attendanceId) => {
     const docRef = doc(db, 'attendance', attendanceId);
     await deleteDoc(docRef);
+};
+
+// Delete session and all its attendance records
+export const deleteSession = async (sessionId) => {
+    console.log('🗑️ deleteSession: Starting...', sessionId);
+    try {
+        // First, delete all attendance records for this session
+        const attendanceQuery = query(
+            collection(db, 'attendance'),
+            where('sessionId', '==', sessionId)
+        );
+        const snapshot = await getDocs(attendanceQuery);
+        console.log('🗑️ deleteSession: Found', snapshot.size, 'attendance records to delete');
+
+        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+
+        // Then delete the session
+        const sessionRef = doc(db, 'sessions', sessionId);
+        await deleteDoc(sessionRef);
+        console.log('🗑️ deleteSession: Success');
+    } catch (error) {
+        console.error('🗑️ deleteSession: Failed', error);
+        throw error;
+    }
 };
 
 // Update attendance record
@@ -876,7 +1054,11 @@ export const validateCheckInCode = async (sessionId, classroomId, token, expiry,
             success: true,
             message: 'เช็คชื่อสำเร็จ',
             student,
-            classroom
+            classroom,
+            session: {
+                id: sessionId,
+                exitTicketEnabled: session.exitTicketEnabled || false
+            }
         };
 
     } catch (error) {
@@ -885,5 +1067,416 @@ export const validateCheckInCode = async (sessionId, classroomId, token, expiry,
             throw error;
         }
         throw new Error('เกิดข้อผิดพลาด กรุณาลองใหม่');
+    }
+};
+
+// ============================================
+// Grade Categories
+// ============================================
+
+export const createGradeCategory = async (classroomId, name, maxScore) => {
+    console.log('📊 createGradeCategory:', { classroomId, name, maxScore });
+
+    // Get current max order
+    const categories = await getGradeCategories(classroomId);
+    const maxOrder = categories.length > 0
+        ? Math.max(...categories.map(c => c.order || 0)) + 1
+        : 0;
+
+    const docRef = await addDoc(collection(db, 'grades_categories'), {
+        classroomId,
+        name,
+        maxScore: Number(maxScore) || 0,
+        isPublished: false,
+        order: maxOrder,
+        createdAt: serverTimestamp()
+    });
+
+    console.log('📊 createGradeCategory: Created', docRef.id);
+    return docRef.id;
+};
+
+export const getGradeCategories = async (classroomId) => {
+    console.log('📊 getGradeCategories:', classroomId);
+    try {
+        const q = query(
+            collection(db, 'grades_categories'),
+            where('classroomId', '==', classroomId)
+        );
+        const snapshot = await getDocs(q);
+        const categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Sort by order
+        categories.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        console.log('📊 getGradeCategories: Found', categories.length);
+        return categories;
+    } catch (error) {
+        console.error('📊 getGradeCategories: Error', error);
+        return [];
+    }
+};
+
+export const updateGradeCategory = async (categoryId, data) => {
+    console.log('📊 updateGradeCategory:', categoryId, data);
+    const docRef = doc(db, 'grades_categories', categoryId);
+    await updateDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp()
+    });
+};
+
+export const deleteGradeCategory = async (categoryId) => {
+    console.log('📊 deleteGradeCategory:', categoryId);
+
+    // Also delete all grades in this category
+    const gradesQuery = query(
+        collection(db, 'grades'),
+        where('categoryId', '==', categoryId)
+    );
+    const snapshot = await getDocs(gradesQuery);
+    const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
+
+    // Delete the category
+    const docRef = doc(db, 'grades_categories', categoryId);
+    await deleteDoc(docRef);
+
+    console.log('📊 deleteGradeCategory: Deleted with', snapshot.size, 'grades');
+};
+
+// ============================================
+// Grades
+// ============================================
+
+export const saveGrades = async (classroomId, categoryId, gradesArray, teacherEmail) => {
+    console.log('📊 saveGrades:', { classroomId, categoryId, count: gradesArray.length });
+
+    const results = { saved: 0, updated: 0, errors: [] };
+
+    for (const grade of gradesArray) {
+        try {
+            // Check if grade already exists for this student + category
+            const existingQuery = query(
+                collection(db, 'grades'),
+                where('categoryId', '==', categoryId),
+                where('studentId', '==', grade.studentId)
+            );
+            const existing = await getDocs(existingQuery);
+
+            if (!existing.empty) {
+                // Update existing
+                const docRef = existing.docs[0].ref;
+                await updateDoc(docRef, {
+                    score: Number(grade.score) || 0,
+                    feedback: grade.feedback || '',
+                    studentName: grade.studentName || '',
+                    studentEmail: grade.studentEmail || '',
+                    updatedAt: serverTimestamp(),
+                    updatedBy: teacherEmail
+                });
+                results.updated++;
+            } else {
+                // Create new
+                await addDoc(collection(db, 'grades'), {
+                    classroomId,
+                    categoryId,
+                    studentId: grade.studentId,
+                    studentEmail: grade.studentEmail?.toLowerCase() || '',
+                    studentName: grade.studentName || '',
+                    score: Number(grade.score) || 0,
+                    feedback: grade.feedback || '',
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    updatedBy: teacherEmail
+                });
+                results.saved++;
+            }
+        } catch (error) {
+            console.error('Error saving grade for', grade.studentId, error);
+            results.errors.push({ studentId: grade.studentId, error: error.message });
+        }
+    }
+
+    console.log('📊 saveGrades: Results', results);
+    return results;
+};
+
+export const getClassroomGrades = async (classroomId) => {
+    console.log('📊 getClassroomGrades:', classroomId);
+    try {
+        const q = query(
+            collection(db, 'grades'),
+            where('classroomId', '==', classroomId)
+        );
+        const snapshot = await getDocs(q);
+        const grades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log('📊 getClassroomGrades: Found', grades.length);
+        return grades;
+    } catch (error) {
+        console.error('📊 getClassroomGrades: Error', error);
+        return [];
+    }
+};
+
+export const getStudentGrades = async (studentEmail) => {
+    console.log('📊 getStudentGrades:', studentEmail);
+    try {
+        const normalizedEmail = studentEmail.toLowerCase();
+
+        // Step 1: Find all classrooms this student is enrolled in
+        const studentsQuery = query(
+            collection(db, 'students'),
+            where('email', '==', normalizedEmail)
+        );
+        const studentsSnapshot = await getDocs(studentsQuery);
+        const enrolledClassroomIds = studentsSnapshot.docs.map(doc => doc.data().classroomId);
+
+        console.log('📊 Student enrolled in classrooms:', enrolledClassroomIds);
+
+        if (enrolledClassroomIds.length === 0) {
+            return [];
+        }
+
+        // Step 2: Get all grades for this student
+        const gradesQuery = query(
+            collection(db, 'grades'),
+            where('studentEmail', '==', normalizedEmail)
+        );
+        const gradesSnapshot = await getDocs(gradesQuery);
+        const allGrades = gradesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Step 3: Get all published categories for enrolled classrooms
+        const categoriesSnapshot = await getDocs(collection(db, 'grades_categories'));
+        const allCategories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Step 4: Group by classroom and include ALL published categories with score = null if no grade exists
+        const result = [];
+
+        for (const classroomId of enrolledClassroomIds) {
+            // Get published categories for this classroom
+            const publishedCategories = allCategories.filter(
+                cat => cat.classroomId === classroomId && cat.isPublished === true
+            );
+
+            if (publishedCategories.length === 0) {
+                continue; // Skip classrooms with no published categories
+            }
+
+            // Sort categories by order
+            publishedCategories.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+            const grades = [];
+            for (const category of publishedCategories) {
+                // Find existing grade for this category
+                const existingGrade = allGrades.find(g => g.categoryId === category.id);
+
+                grades.push({
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    maxScore: category.maxScore || 0,
+                    score: existingGrade ? existingGrade.score : null, // null = no grade (N/A)
+                    feedback: existingGrade?.feedback || null,
+                    gradeId: existingGrade?.id || null
+                });
+            }
+
+            // Get classroom name
+            let classroomName = '';
+            try {
+                const classroomDoc = await getDoc(doc(db, 'classrooms', classroomId));
+                if (classroomDoc.exists()) {
+                    classroomName = classroomDoc.data().name || '';
+                }
+            } catch (e) {
+                console.log('Could not get classroom name:', e);
+            }
+
+            result.push({
+                classroomId,
+                classroomName,
+                grades
+            });
+        }
+
+        console.log('📊 getStudentGrades: Result', result.length, 'classrooms');
+        return result;
+    } catch (error) {
+        console.error('📊 getStudentGrades: Error', error);
+        return [];
+    }
+};
+
+export const updateGrade = async (gradeId, score, teacherEmail, feedback = null) => {
+    console.log('📊 updateGrade:', gradeId, score);
+    const docRef = doc(db, 'grades', gradeId);
+    const updateData = {
+        score: Number(score) || 0,
+        updatedAt: serverTimestamp(),
+        updatedBy: teacherEmail
+    };
+    // Only update feedback if provided (not null)
+    if (feedback !== null) {
+        updateData.feedback = feedback;
+    }
+    await updateDoc(docRef, updateData);
+};
+
+// Update only feedback for a grade
+export const updateGradeFeedback = async (gradeId, feedback, teacherEmail) => {
+    console.log('📊 updateGradeFeedback:', gradeId, feedback);
+    const docRef = doc(db, 'grades', gradeId);
+    await updateDoc(docRef, {
+        feedback: feedback || '',
+        updatedAt: serverTimestamp(),
+        updatedBy: teacherEmail
+    });
+};
+
+export const deleteGrade = async (gradeId) => {
+    console.log('📊 deleteGrade:', gradeId);
+    const docRef = doc(db, 'grades', gradeId);
+    await deleteDoc(docRef);
+};
+
+// ============================================
+// Exit Ticket Functions
+// ============================================
+
+// Check if exit ticket is still open for a session
+export const isExitTicketOpen = (session) => {
+    if (!session) return false;
+    // Must be enabled and not manually closed
+    if (!session.exitTicketEnabled || session.exitTicketClosedManually) return false;
+    // Check deadline
+    if (session.exitTicketDeadline) {
+        const deadline = session.exitTicketDeadline.toDate?.() || new Date(session.exitTicketDeadline);
+        if (new Date() > deadline) return false;
+    }
+    return true;
+};
+
+// Close exit ticket manually (teacher action)
+export const closeSessionExitTicket = async (sessionId) => {
+    console.log('🎫 closeSessionExitTicket:', sessionId);
+    const docRef = doc(db, 'sessions', sessionId);
+    await updateDoc(docRef, {
+        exitTicketClosedManually: true
+    });
+};
+
+// Legacy toggle function - now just calls close
+export const toggleSessionExitTicket = async (sessionId, enabled) => {
+    console.log('🎫 toggleSessionExitTicket:', sessionId, enabled);
+    const docRef = doc(db, 'sessions', sessionId);
+    if (!enabled) {
+        await updateDoc(docRef, { exitTicketClosedManually: true });
+    } else {
+        // Reopen with new 24hr deadline
+        const newDeadline = Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+        await updateDoc(docRef, {
+            exitTicketClosedManually: false,
+            exitTicketEnabled: true,
+            exitTicketDeadline: newDeadline
+        });
+    }
+};
+
+// Submit exit ticket from student
+export const submitExitTicket = async (sessionId, classroomId, studentData, rating, reason, keyTakeaway) => {
+    console.log('🎫 submitExitTicket:', { sessionId, studentId: studentData.studentId, rating });
+    try {
+        // Check if already submitted
+        const existingQuery = query(
+            collection(db, 'exit_tickets'),
+            where('sessionId', '==', sessionId),
+            where('studentEmail', '==', studentData.email?.toLowerCase() || '')
+        );
+        const existing = await getDocs(existingQuery);
+
+        if (!existing.empty) {
+            throw new Error('คุณส่ง Exit Ticket ไปแล้ว');
+        }
+
+        const docRef = await addDoc(collection(db, 'exit_tickets'), {
+            sessionId,
+            classroomId: classroomId || '',
+            studentId: studentData.studentId || '',
+            studentEmail: studentData.email?.toLowerCase() || '',
+            studentName: studentData.name || '',
+            rating: Number(rating),
+            reason: reason || '',
+            keyTakeaway: keyTakeaway || '',
+            createdAt: serverTimestamp()
+        });
+
+        console.log('🎫 Exit ticket submitted:', docRef.id);
+        return { success: true, id: docRef.id };
+    } catch (error) {
+        console.error('🎫 submitExitTicket error:', error);
+        throw error;
+    }
+};
+
+// Check if student already submitted exit ticket
+export const getExitTicketByStudent = async (sessionId, studentEmail) => {
+    console.log('🎫 getExitTicketByStudent:', sessionId, studentEmail);
+    try {
+        const q = query(
+            collection(db, 'exit_tickets'),
+            where('sessionId', '==', sessionId),
+            where('studentEmail', '==', studentEmail.toLowerCase())
+        );
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            return null;
+        }
+        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    } catch (error) {
+        console.error('🎫 getExitTicketByStudent error:', error);
+        return null;
+    }
+};
+
+// Get all exit tickets for a session (for teacher view)
+export const getSessionExitTickets = async (sessionId) => {
+    console.log('🎫 getSessionExitTickets:', sessionId);
+    try {
+        const q = query(
+            collection(db, 'exit_tickets'),
+            where('sessionId', '==', sessionId)
+        );
+        const snapshot = await getDocs(q);
+        const tickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Sort by createdAt descending in JS
+        tickets.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date(0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date(0);
+            return dateB - dateA;
+        });
+        console.log('🎫 Found', tickets.length, 'exit tickets');
+        return tickets;
+    } catch (error) {
+        console.error('🎫 getSessionExitTickets error:', error);
+        return [];
+    }
+};
+
+// Get exit ticket stats for a session
+export const getExitTicketStats = async (sessionId) => {
+    console.log('🎫 getExitTicketStats:', sessionId);
+    try {
+        const tickets = await getSessionExitTickets(sessionId);
+        if (tickets.length === 0) {
+            return { count: 0, avgRating: 0 };
+        }
+        const totalRating = tickets.reduce((sum, t) => sum + (t.rating || 0), 0);
+        return {
+            count: tickets.length,
+            avgRating: (totalRating / tickets.length).toFixed(1)
+        };
+    } catch (error) {
+        console.error('🎫 getExitTicketStats error:', error);
+        return { count: 0, avgRating: 0 };
     }
 };

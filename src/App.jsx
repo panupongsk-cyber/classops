@@ -13,11 +13,14 @@ import Dashboard from './pages/teacher/Dashboard';
 import Classrooms from './pages/teacher/Classrooms';
 import Students from './pages/teacher/Students';
 import Settings from './pages/teacher/Settings';
+import CourseDashboard from './pages/teacher/CourseDashboard';
+import GradesPage from './pages/teacher/GradesPage';
 
 // Student Pages
 import ScanPage from './pages/student/ScanPage';
 import History from './pages/student/History';
 import CheckInPage from './pages/student/CheckInPage';
+import StudentGrades from './pages/student/StudentGrades';
 
 // Protected Route Component
 function ProtectedRoute({ children, allowedRoles }) {
@@ -84,7 +87,7 @@ export default function App() {
                 background: 'var(--bg-primary)'
             }}>
                 <div className="text-center">
-                    <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Attendance</h1>
+                    <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>ClassOps</h1>
                     <p className="text-muted">กำลังโหลด...</p>
                 </div>
             </div>
@@ -184,6 +187,26 @@ export default function App() {
                     </ProtectedRoute>
                 }
             />
+            <Route
+                path="/teacher/course-stats"
+                element={
+                    <ProtectedRoute allowedRoles={['admin', 'teacher']}>
+                        <AppLayout>
+                            <CourseDashboard />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/teacher/grades"
+                element={
+                    <ProtectedRoute allowedRoles={['admin', 'teacher']}>
+                        <AppLayout>
+                            <GradesPage />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
 
             {/* Student Routes */}
             <Route
@@ -192,6 +215,16 @@ export default function App() {
                     <ProtectedRoute allowedRoles={['student']}>
                         <AppLayout>
                             <History />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/grades"
+                element={
+                    <ProtectedRoute allowedRoles={['student']}>
+                        <AppLayout>
+                            <StudentGrades />
                         </AppLayout>
                     </ProtectedRoute>
                 }

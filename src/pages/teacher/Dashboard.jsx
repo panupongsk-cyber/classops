@@ -10,6 +10,9 @@ import {
     subscribeToSession,
     getStudents,
     getAdminConfig,
+    manualCheckIn,
+    recordLeave,
+    updateSessionLocation,
     DEFAULT_CHECKIN_RADIUS,
     DEFAULT_QR_INTERVAL,
     DEFAULT_GRACE_PERIOD,
@@ -17,6 +20,8 @@ import {
 } from '../../firebase/firestore';
 import QRGenerator from '../../components/QRGenerator';
 import AttendanceList from '../../components/AttendanceList';
+import ManualCheckInModal from '../../components/ManualCheckInModal';
+import StartSessionModal from '../../components/StartSessionModal';
 
 export default function Dashboard() {
     const { user, userRole } = useAuth();
@@ -25,7 +30,12 @@ export default function Dashboard() {
     const [session, setSession] = useState(null);
     const [attendance, setAttendance] = useState([]);
     const [studentCount, setStudentCount] = useState(0);
+    const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showManualModal, setShowManualModal] = useState(false);
+    const [showStartModal, setShowStartModal] = useState(false);
+    const [adminConfig, setAdminConfig] = useState(null);
+    const [updatingLocation, setUpdatingLocation] = useState(false);
 
     // Load classrooms
     useEffect(() => {
@@ -35,7 +45,7 @@ export default function Dashboard() {
                 // Admin sees all classrooms, teacher sees only their own
                 const data = userRole === 'admin'
                     ? await getAllClassrooms()
-                    : await getClassrooms(user.uid);
+                    : await getClassrooms(user.uid, user.email);
 
                 console.log('📚 Dashboard loaded classrooms:', data.length);
                 setClassrooms(data);
@@ -60,8 +70,9 @@ export default function Dashboard() {
                 const activeSession = await getActiveSession(selectedClassroom.id);
                 setSession(activeSession);
 
-                const students = await getStudents(selectedClassroom.id);
-                setStudentCount(students.length);
+                const studentsData = await getStudents(selectedClassroom.id);
+                setStudents(studentsData);
+                setStudentCount(studentsData.length);
             } catch (error) {
                 console.error('Failed to load session:', error);
             }
@@ -89,42 +100,24 @@ export default function Dashboard() {
         };
     }, [session?.id]);
 
-    const handleStartSession = async () => {
+    const handleStartSession = async ({ useGPS, location }) => {
         if (!selectedClassroom) return;
 
         try {
-            // Get admin config for check-in radius
-            const config = await getAdminConfig();
+            const config = adminConfig || await getAdminConfig();
             const checkInRadius = config.checkInRadius || DEFAULT_CHECKIN_RADIUS;
-
-            // Get teacher's GPS location
-            let location = null;
-            try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    });
-                });
-                location = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
-                };
-                console.log('📍 Teacher location:', location);
-            } catch (gpsError) {
-                console.warn('⚠️ Could not get GPS location:', gpsError.message);
-                // Continue without GPS - session will not require location check
-                alert('ไม่สามารถเข้าถึงตำแหน่ง GPS ได้ การเช็คชื่อจะไม่ตรวจสอบตำแหน่ง');
-            }
-
-            // Use qrInterval and gracePeriod from admin config
-            const qrInterval = config.qrInterval || DEFAULT_QR_INTERVAL;
+            const qrInterval = selectedClassroom.qrInterval || config.qrInterval || DEFAULT_QR_INTERVAL;
             const gracePeriod = config.gracePeriod || DEFAULT_GRACE_PERIOD;
-            // Default to true if not present, false if strictly false
-            const requireGPS = config.requireGPS !== false;
 
-            const newSession = await createSession(selectedClassroom.id, qrInterval, location, checkInRadius, gracePeriod, requireGPS);
+            const newSession = await createSession(
+                selectedClassroom.id,
+                qrInterval,
+                useGPS ? location : null,
+                checkInRadius,
+                gracePeriod,
+                useGPS
+            );
+
             setSession({
                 id: newSession.id,
                 classroomId: selectedClassroom.id,
@@ -134,12 +127,51 @@ export default function Dashboard() {
                 isActive: true,
                 qrInterval,
                 gracePeriod,
-                location,
+                requireGPS: useGPS,
+                location: useGPS ? location : null,
                 checkInRadius
             });
         } catch (error) {
             console.error('Failed to start session:', error);
-            alert('ไม่สามารถเริ่มเซสชั่นได้: ' + error.message);
+            throw error;
+        }
+    };
+
+    const handleUpdateLocation = async () => {
+        if (!session?.id) return;
+
+        setUpdatingLocation(true);
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 0
+                });
+            });
+
+            const location = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+            };
+
+            const config = adminConfig || await getAdminConfig();
+            const checkInRadius = config.checkInRadius || DEFAULT_CHECKIN_RADIUS;
+
+            await updateSessionLocation(session.id, location, checkInRadius);
+
+            setSession(prev => ({
+                ...prev,
+                location,
+                requireGPS: true
+            }));
+
+            alert(`✅ อัพเดทตำแหน่งสำเร็จ!\n\nพิกัด: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
+        } catch (error) {
+            console.error('Failed to update location:', error);
+            alert('ไม่สามารถอัพเดทตำแหน่งได้: ' + error.message);
+        } finally {
+            setUpdatingLocation(false);
         }
     };
 
@@ -153,6 +185,27 @@ export default function Dashboard() {
         } catch (error) {
             console.error('Failed to end session:', error);
         }
+    };
+
+    const handleManualCheckIn = async (student) => {
+        if (!session?.id) return;
+        await manualCheckIn(
+            session.id,
+            student,
+            selectedClassroom?.name || '',
+            user?.email || ''
+        );
+    };
+
+    const handleRecordLeave = async (student, reason) => {
+        if (!session?.id) return;
+        await recordLeave(
+            session.id,
+            student,
+            selectedClassroom?.name || '',
+            reason,
+            user?.email || ''
+        );
     };
 
     if (loading) {
@@ -251,15 +304,57 @@ export default function Dashboard() {
                                             📚 {selectedClassroom?.name} {selectedClassroom?.code ? `(${selectedClassroom.code})` : ''}
                                         </div>
                                     </div>
-                                    <button className="btn btn-danger" onClick={handleEndSession}>
-                                        ปิดการเช็คชื่อ
-                                    </button>
+                                    <div className="flex gap-sm">
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => setShowManualModal(true)}
+                                        >
+                                            ➕ เช็คชื่อ/ลา
+                                        </button>
+                                        <button className="btn btn-danger" onClick={handleEndSession}>
+                                            ปิดการเช็คชื่อ
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex justify-center">
                                     <QRGenerator
                                         session={session}
                                         qrInterval={selectedClassroom?.qrInterval || 30}
                                     />
+                                </div>
+
+                                {/* GPS Status */}
+                                <div style={{
+                                    marginTop: 'var(--space-lg)',
+                                    padding: 'var(--space-md)',
+                                    background: 'var(--bg-glass)',
+                                    borderRadius: 'var(--radius-md)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    flexWrap: 'wrap',
+                                    gap: 'var(--space-sm)'
+                                }}>
+                                    <div>
+                                        {session?.requireGPS && session?.location ? (
+                                            <>
+                                                <span style={{ color: 'var(--success)' }}>📍 GPS: เปิดใช้งาน</span>
+                                                <div className="text-muted" style={{ fontSize: '0.8rem' }}>
+                                                    พิกัด: {session.location.latitude.toFixed(5)}, {session.location.longitude.toFixed(5)}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <span style={{ color: 'var(--warning)' }}>📍 GPS: ปิดใช้งาน (ไม่ตรวจตำแหน่ง)</span>
+                                        )}
+                                    </div>
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={handleUpdateLocation}
+                                        disabled={updatingLocation}
+                                        style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                                    >
+                                        {updatingLocation ? '📍 กำลังหาตำแหน่ง...' : '📍 อัพเดทตำแหน่ง'}
+                                    </button>
                                 </div>
                             </>
                         ) : (
@@ -274,7 +369,7 @@ export default function Dashboard() {
                                 <p className="text-muted mb-lg">
                                     กดปุ่มด้านล่างเพื่อสร้าง QR Code ให้นักศึกษา scan
                                 </p>
-                                <button className="btn btn-primary btn-lg" onClick={handleStartSession}>
+                                <button className="btn btn-primary btn-lg" onClick={() => setShowStartModal(true)}>
                                     เริ่มเช็คชื่อ
                                 </button>
                             </div>
@@ -292,6 +387,25 @@ export default function Dashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* Manual Check-in Modal */}
+            <ManualCheckInModal
+                isOpen={showManualModal}
+                onClose={() => setShowManualModal(false)}
+                students={students}
+                attendance={attendance}
+                onCheckIn={handleManualCheckIn}
+                onRecordLeave={handleRecordLeave}
+            />
+
+            {/* Start Session Modal */}
+            <StartSessionModal
+                isOpen={showStartModal}
+                onClose={() => setShowStartModal(false)}
+                onStart={handleStartSession}
+                adminRequireGPS={adminConfig?.requireGPS !== false}
+                classroom={selectedClassroom}
+            />
         </div>
     );
 }

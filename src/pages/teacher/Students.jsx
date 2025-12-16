@@ -43,6 +43,7 @@ export default function Students() {
     const [showCSVModal, setShowCSVModal] = useState(false);
     const [editingStudent, setEditingStudent] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
+    const [sortBy, setSortBy] = useState('name'); // 'name' or 'studentId'
 
     // Load classrooms
     useEffect(() => {
@@ -52,7 +53,7 @@ export default function Students() {
                 // Admin sees all classrooms, teacher sees only their own
                 const data = userRole === 'admin'
                     ? await getAllClassrooms()
-                    : await getClassrooms(user.uid);
+                    : await getClassrooms(user.uid, user.email);
                 setClassrooms(data);
                 if (data.length > 0) {
                     setSelectedClassroom(data[0]);
@@ -101,6 +102,15 @@ export default function Students() {
         setStudents(prev => prev.filter(s => s.id !== deleteTarget.id));
         setDeleteTarget(null);
     };
+
+    // Sort students
+    const sortedStudents = [...students].sort((a, b) => {
+        if (sortBy === 'name') {
+            return (a.name || '').localeCompare(b.name || '', 'th');
+        } else {
+            return (a.studentId || '').localeCompare(b.studentId || '');
+        }
+    });
 
     if (loading) {
         return (
@@ -175,8 +185,22 @@ export default function Students() {
 
                 {/* Student List */}
                 <div className="card">
-                    <div className="card-header">
+                    <div className="card-header flex justify-between items-center">
                         <h3 className="card-title">รายชื่อนักศึกษา</h3>
+                        {students.length > 0 && (
+                            <div className="flex gap-sm items-center">
+                                <label style={{ fontSize: '0.85rem' }}>เรียงตาม:</label>
+                                <select
+                                    className="form-input form-select"
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    style={{ width: 'auto', minWidth: '120px', padding: '0.3rem 0.5rem' }}
+                                >
+                                    <option value="name">ชื่อ</option>
+                                    <option value="studentId">รหัสนิสิต</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
 
                     {students.length === 0 ? (
@@ -202,7 +226,7 @@ export default function Students() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {students.map((student) => (
+                                {sortedStudents.map((student) => (
                                     <tr key={student.id}>
                                         <td style={{ fontWeight: 500 }}>{student.name}</td>
                                         <td>{student.studentId}</td>

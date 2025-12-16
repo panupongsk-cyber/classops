@@ -3,7 +3,9 @@ import {
     signOut,
     onAuthStateChanged,
     GoogleAuthProvider,
-    signInWithPopup
+    signInWithPopup,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/firebase';
@@ -21,7 +23,8 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [userRole, setUserRole] = useState(null);
+    const [userRole, setUserRole] = useState(null); // actual role from DB
+    const [activeRole, setActiveRole] = useState(null); // role user is currently viewing as
     const [loading, setLoading] = useState(true);
     const [authError, setAuthError] = useState(null);
 
@@ -41,6 +44,7 @@ export const AuthProvider = ({ children }) => {
 
                     // Set state FIRST (don't wait for Firestore)
                     setUserRole('admin');
+                    setActiveRole('admin'); // default to admin view
                     setUser({
                         ...firebaseUser,
                         role: 'admin',
@@ -73,6 +77,7 @@ export const AuthProvider = ({ children }) => {
 
                         // Set state FIRST
                         setUserRole('teacher');
+                        setActiveRole('teacher');
                         setUser({
                             ...firebaseUser,
                             role: 'teacher',
@@ -106,6 +111,7 @@ export const AuthProvider = ({ children }) => {
                         console.log('✅ User is STUDENT');
 
                         setUserRole('student');
+                        setActiveRole('student');
                         setUser({
                             ...firebaseUser,
                             role: 'student',
@@ -136,6 +142,7 @@ export const AuthProvider = ({ children }) => {
                 // Not found in students collection - set as pending (let check-in validate)
                 console.log('⚠️ User not pre-registered, allowing as pending');
                 setUserRole('student'); // Treat as student, let server validate
+                setActiveRole('student');
                 setUser({
                     ...firebaseUser,
                     role: 'student',
@@ -148,6 +155,7 @@ export const AuthProvider = ({ children }) => {
                 console.log('🔐 No user logged in');
                 setUser(null);
                 setUserRole(null);
+                setActiveRole(null);
                 setLoading(false);
             }
         });
@@ -182,17 +190,65 @@ export const AuthProvider = ({ children }) => {
         setAuthError(null);
     };
 
+    // Switch role view (for admin to view as teacher)
+    const switchRole = (role) => {
+        // Only admin can switch roles
+        if (userRole === 'admin') {
+            setActiveRole(role);
+        }
+    };
+
+    // Reset to original role
+    const resetRole = () => {
+        setActiveRole(userRole);
+    };
+
+    // Email/Password Sign-in
+    const signInWithEmail = async (email, password) => {
+        console.log('🔐 Starting Email sign-in...', email);
+        setAuthError(null);
+        try {
+            const result = await signInWithEmailAndPassword(auth, email, password);
+            console.log('🔐 Email sign-in success:', result.user.email);
+            return result.user;
+        } catch (error) {
+            console.error('❌ Email sign-in failed:', error.code, error.message);
+            // Try to create user if not exists (Firebase returns different error codes)
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+                try {
+                    console.log('🔐 User not found, creating...', email);
+                    const result = await createUserWithEmailAndPassword(auth, email, password);
+                    console.log('🔐 User created:', result.user.email);
+                    return result.user;
+                } catch (createError) {
+                    console.error('❌ Create user failed:', createError.code, createError.message);
+                    // If email already exists, it means wrong password
+                    if (createError.code === 'auth/email-already-in-use') {
+                        throw { code: 'auth/wrong-password', message: 'รหัสผ่านไม่ถูกต้อง' };
+                    }
+                    throw createError;
+                }
+            }
+            throw error;
+        }
+    };
+
     const value = {
         user,
-        userRole,
+        userRole,      // actual role from DB
+        activeRole,    // role currently viewing as
         loading,
         authError,
         signInWithGoogle,
+        signInWithEmail,
         logout,
         clearError,
+        switchRole,
+        resetRole,
         isAdmin: userRole === 'admin',
-        isTeacher: userRole === 'teacher',
-        isStudent: userRole === 'student'
+        isTeacher: userRole === 'teacher' || (userRole === 'admin' && activeRole === 'teacher'),
+        isStudent: userRole === 'student',
+        canSwitchRole: userRole === 'admin'
     };
 
     return (

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { validateCheckInCode, getClassroom, getEmojiPool } from '../../firebase/firestore';
+import { validateCheckInCode, getClassroom, getEmojiPool, getExitTicketByStudent } from '../../firebase/firestore';
 
 const CheckIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -39,6 +39,11 @@ export default function CheckInPage() {
     // Emoji challenge state
     const [selectedEmojis, setSelectedEmojis] = useState([]);
     const [emojiPool] = useState(() => getEmojiPool()); // Load immediately on mount
+
+    // Exit ticket state
+    const [showExitTicket, setShowExitTicket] = useState(false);
+    const [exitTicketEnabled, setExitTicketEnabled] = useState(false);
+    const [exitTicketSubmitted, setExitTicketSubmitted] = useState(false);
 
     // Get URL parameters
     const sessionId = searchParams.get('s');
@@ -183,6 +188,19 @@ export default function CheckInPage() {
             if (result.classroom) {
                 setClassroom(result.classroom);
             }
+
+            // Check if exit ticket is enabled for this session
+            if (result.session?.exitTicketEnabled) {
+                setExitTicketEnabled(true);
+                // Check if already submitted
+                const existing = await getExitTicketByStudent(sessionId, user.email);
+                if (!existing) {
+                    setShowExitTicket(true);
+                } else {
+                    setExitTicketSubmitted(true);
+                }
+            }
+
             setStatus('success');
         } catch (e) {
             console.error('Check-in failed:', e);
@@ -451,8 +469,40 @@ export default function CheckInPage() {
                     )}
 
                     {studentInfo && (
-                        <p style={{ marginBottom: 'var(--space-xl)' }}>
+                        <p style={{ marginBottom: 'var(--space-lg)' }}>
                             {studentInfo.name} ({studentInfo.studentId})
+                        </p>
+                    )}
+
+                    {/* Exit Ticket Notification Banner */}
+                    {exitTicketEnabled && !exitTicketSubmitted && (
+                        <div style={{
+                            background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
+                            borderRadius: 'var(--radius-md)',
+                            padding: 'var(--space-md)',
+                            marginBottom: 'var(--space-lg)',
+                            color: 'white'
+                        }}>
+                            <p style={{ marginBottom: 'var(--space-sm)', fontWeight: 500 }}>
+                                📝 อาจารย์เปิดให้ตอบ Exit Ticket
+                            </p>
+                            <button
+                                onClick={() => navigate('/student')}
+                                className="btn"
+                                style={{
+                                    background: 'rgba(255,255,255,0.2)',
+                                    color: 'white',
+                                    border: '1px solid rgba(255,255,255,0.3)'
+                                }}
+                            >
+                                ไปให้ Feedback ในประวัติการเช็คชื่อ →
+                            </button>
+                        </div>
+                    )}
+
+                    {exitTicketSubmitted && (
+                        <p className="text-muted" style={{ marginBottom: 'var(--space-lg)', fontSize: '0.9rem' }}>
+                            ✅ ส่ง Exit Ticket แล้ว
                         </p>
                     )}
 

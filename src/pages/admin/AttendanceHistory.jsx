@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAllSessions, getSessionAttendance, deleteAttendance, getAllClassrooms } from '../../firebase/firestore';
+import { getAllSessions, getSessionAttendance, deleteAttendance, deleteSession, getAllClassrooms } from '../../firebase/firestore';
 
 export default function AttendanceHistory() {
     const [sessions, setSessions] = useState([]);
@@ -116,6 +116,21 @@ export default function AttendanceHistory() {
         } catch (error) {
             console.error('Failed to delete:', error);
             alert('ลบไม่สำเร็จ: ' + error.message);
+        }
+    };
+
+    const handleDeleteSession = async (sessionId) => {
+        if (!confirm('⚠️ ต้องการลบเซสชั่นนี้?\n\nการลบเซสชั่นจะลบข้อมูลการเช็คชื่อทั้งหมดที่อยู่ในเซสชั่นนี้ด้วย และไม่สามารถกู้คืนได้')) return;
+
+        try {
+            await deleteSession(sessionId);
+            // Remove from local state
+            setAllSessions(allSessions.filter(s => s.id !== sessionId));
+            setSelectedSession(null);
+            setAttendance([]);
+        } catch (error) {
+            console.error('Failed to delete session:', error);
+            alert('ลบเซสชั่นไม่สำเร็จ: ' + error.message);
         }
     };
 
@@ -485,6 +500,13 @@ export default function AttendanceHistory() {
                                     </>
                                 )}
                             </div>
+                            <button
+                                onClick={() => handleDeleteSession(selectedSession.id)}
+                                className="btn btn-danger"
+                                style={{ marginTop: 'var(--space-md)' }}
+                            >
+                                🗑️ ลบเซสชั่นนี้
+                            </button>
                         </div>
                     )}
                 </div>

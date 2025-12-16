@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Modal({ isOpen, onClose, title, children, footer }) {
     if (!isOpen) return null;
@@ -24,16 +24,46 @@ export default function Modal({ isOpen, onClose, title, children, footer }) {
 }
 
 // Classroom Form Modal
-export function ClassroomModal({ isOpen, onClose, onSubmit, classroom = null }) {
+export function ClassroomModal({ isOpen, onClose, onSubmit, classroom = null, teachers = [] }) {
     const [name, setName] = useState(classroom?.name || '');
     const [code, setCode] = useState(classroom?.code || '');
+    const [qrInterval, setQrInterval] = useState(classroom?.qrInterval || 30);
+    const [selectedTeachers, setSelectedTeachers] = useState(classroom?.teacherEmails || []);
     const [loading, setLoading] = useState(false);
+
+    // Update form when classroom prop changes (for edit mode)
+    useEffect(() => {
+        if (classroom) {
+            setName(classroom.name || '');
+            setCode(classroom.code || '');
+            setQrInterval(classroom.qrInterval || 30);
+            setSelectedTeachers(classroom.teacherEmails || []);
+        } else {
+            setName('');
+            setCode('');
+            setQrInterval(30);
+            setSelectedTeachers([]);
+        }
+    }, [classroom]);
+
+    const toggleTeacher = (email) => {
+        setSelectedTeachers(prev =>
+            prev.includes(email)
+                ? prev.filter(e => e !== email)
+                : [...prev, email]
+        );
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
-            await onSubmit({ name, code });
+            await onSubmit({
+                name,
+                code,
+                qrInterval: Number(qrInterval),
+                teacherEmails: selectedTeachers
+            });
             onClose();
         } catch (error) {
             console.error(error);
@@ -80,6 +110,64 @@ export function ClassroomModal({ isOpen, onClose, onSubmit, classroom = null }) 
                         placeholder="เช่น CS101"
                     />
                 </div>
+                <div className="form-group">
+                    <label className="form-label">QR Refresh Interval (วินาที)</label>
+                    <input
+                        type="number"
+                        className="form-input"
+                        value={qrInterval}
+                        onChange={(e) => setQrInterval(e.target.value)}
+                        min="10"
+                        max="300"
+                        required
+                    />
+                    <small className="text-muted">QR Code และรหัส emoji จะเปลี่ยนทุก ๆ กี่วินาที (10-300)</small>
+                </div>
+
+                {/* Teacher selection */}
+                {teachers.length > 0 && (
+                    <div className="form-group">
+                        <label className="form-label">อาจารย์ผู้รับผิดชอบ</label>
+                        <div style={{
+                            maxHeight: '150px',
+                            overflowY: 'auto',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: 'var(--space-sm)'
+                        }}>
+                            {teachers.map(teacher => (
+                                <label
+                                    key={teacher.email}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 'var(--space-sm)',
+                                        padding: 'var(--space-xs) var(--space-sm)',
+                                        cursor: 'pointer',
+                                        borderRadius: 'var(--radius-sm)',
+                                        background: selectedTeachers.includes(teacher.email)
+                                            ? 'rgba(99, 102, 241, 0.1)'
+                                            : 'transparent'
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedTeachers.includes(teacher.email)}
+                                        onChange={() => toggleTeacher(teacher.email)}
+                                        style={{ width: '18px', height: '18px' }}
+                                    />
+                                    <span>
+                                        {teacher.name}
+                                        <span className="text-muted" style={{ fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+                                            ({teacher.email})
+                                        </span>
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                        <small className="text-muted">เลือกอาจารย์ที่สามารถจัดการรายวิชานี้ได้</small>
+                    </div>
+                )}
             </form>
         </Modal>
     );
