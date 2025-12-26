@@ -82,6 +82,14 @@ const ShieldIcon = () => (
     </svg>
 );
 
+const GroupIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 21a8 8 0 0 0-16 0" />
+        <circle cx="10" cy="8" r="5" />
+        <path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3" />
+    </svg>
+);
+
 export default function Navbar() {
     const { user, userRole, activeRole, switchRole, canSwitchRole, logout } = useAuth();
     const location = useLocation();
@@ -94,13 +102,13 @@ export default function Navbar() {
 
     const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
-    // Admin navigation items (includes teacher pages)
     const adminNavItems = [
         { path: '/admin', icon: <DashboardIcon />, label: 'Admin', exact: true },
         { path: '/admin/teachers', icon: <UsersIcon />, label: 'อาจารย์' },
         { path: '/teacher', icon: <DashboardIcon />, label: 'เช็คชื่อ', exact: true },
         { path: '/teacher/classrooms', icon: <ClassroomIcon />, label: 'รายวิชา' },
         { path: '/teacher/students', icon: <UsersIcon />, label: 'นักศึกษา' },
+        { path: '/teacher/groups', icon: <GroupIcon />, label: 'กลุ่ม' },
         { path: '/teacher/grades', icon: <GradesIcon />, label: 'คะแนน' },
         { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'สถิติ' },
     ];
@@ -110,6 +118,7 @@ export default function Navbar() {
         { path: '/teacher', icon: <DashboardIcon />, label: 'Dashboard', exact: true },
         { path: '/teacher/classrooms', icon: <ClassroomIcon />, label: 'รายวิชา' },
         { path: '/teacher/students', icon: <UsersIcon />, label: 'นักศึกษา' },
+        { path: '/teacher/groups', icon: <GroupIcon />, label: 'กลุ่ม' },
         { path: '/teacher/grades', icon: <GradesIcon />, label: 'คะแนน' },
         { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'สถิติ' },
         { path: '/teacher/settings', icon: <SettingsIcon />, label: 'ตั้งค่า' },

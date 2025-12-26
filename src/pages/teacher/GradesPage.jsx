@@ -10,7 +10,10 @@ import {
     updateGradeCategory,
     deleteGradeCategory,
     saveGrades,
-    updateGrade
+    updateGrade,
+    getGroupSets,
+    getStudentGroups,
+    saveGroupGrades
 } from '../../firebase/firestore';
 import Modal from '../../components/Modal';
 
@@ -36,6 +39,16 @@ export default function GradesPage() {
     const [previewData, setPreviewData] = useState([]);
     const [showPreview, setShowPreview] = useState(false);
     const [importing, setImporting] = useState(false);
+
+    // Group grading states
+    const [gradingMode, setGradingMode] = useState('individual'); // 'individual' or 'group'
+    const [groupSets, setGroupSets] = useState([]);
+    const [selectedGroupSet, setSelectedGroupSet] = useState(null);
+    const [groups, setGroups] = useState([]);
+    const [loadingGroups, setLoadingGroups] = useState(false);
+    const [groupGradeCategory, setGroupGradeCategory] = useState('');
+    const [groupGradeInputs, setGroupGradeInputs] = useState({});
+    const [savingGroupGrades, setSavingGroupGrades] = useState(false);
 
     // Load classrooms
     useEffect(() => {
@@ -82,6 +95,98 @@ export default function GradesPage() {
         };
         loadData();
     }, [selectedClassroom?.id]);
+
+    // Load group sets when classroom changes
+    useEffect(() => {
+        const loadGroupSets = async () => {
+            if (!selectedClassroom?.id) {
+                setGroupSets([]);
+                return;
+            }
+            try {
+                const sets = await getGroupSets(selectedClassroom.id);
+                setGroupSets(sets);
+                if (sets.length > 0) {
+                    setSelectedGroupSet(sets[0]);
+                } else {
+                    setSelectedGroupSet(null);
+                    setGroups([]);
+                }
+            } catch (error) {
+                console.error('Failed to load group sets:', error);
+            }
+        };
+        loadGroupSets();
+    }, [selectedClassroom?.id]);
+
+    // Load groups when selected set changes
+    useEffect(() => {
+        const loadGroups = async () => {
+            if (!selectedGroupSet?.id) {
+                setGroups([]);
+                return;
+            }
+            setLoadingGroups(true);
+            try {
+                const groupsData = await getStudentGroups(selectedGroupSet.id);
+                setGroups(groupsData);
+                // Reset inputs
+                setGroupGradeInputs({});
+            } catch (error) {
+                console.error('Failed to load groups:', error);
+            } finally {
+                setLoadingGroups(false);
+            }
+        };
+        loadGroups();
+    }, [selectedGroupSet?.id]);
+
+    // Handle group grade save
+    const handleSaveGroupGrades = async () => {
+        if (!groupGradeCategory) {
+            alert('กรุณาเลือกหมวดคะแนน');
+            return;
+        }
+
+        const groupsWithScores = Object.entries(groupGradeInputs).filter(
+            ([_, score]) => score !== '' && score !== undefined
+        );
+
+        if (groupsWithScores.length === 0) {
+            alert('กรุณาใส่คะแนนอย่างน้อย 1 กลุ่ม');
+            return;
+        }
+
+        setSavingGroupGrades(true);
+        try {
+            let totalSaved = 0;
+            let totalUpdated = 0;
+
+            for (const [groupId, score] of groupsWithScores) {
+                const result = await saveGroupGrades(
+                    selectedClassroom.id,
+                    groupGradeCategory,
+                    groupId,
+                    score,
+                    user?.email || ''
+                );
+                totalSaved += result.saved;
+                totalUpdated += result.updated;
+            }
+
+            alert(`บันทึกสำเร็จ!\nเพิ่มใหม่: ${totalSaved}\nอัพเดท: ${totalUpdated}`);
+
+            // Refresh grades
+            const updatedGrades = await getClassroomGrades(selectedClassroom.id);
+            setGrades(updatedGrades);
+            setGroupGradeInputs({});
+        } catch (error) {
+            console.error('Failed to save group grades:', error);
+            alert('เกิดข้อผิดพลาด: ' + error.message);
+        } finally {
+            setSavingGroupGrades(false);
+        }
+    };
 
     // Category management
     const handleSaveCategory = async () => {
@@ -366,6 +471,145 @@ export default function GradesPage() {
                 </div>
             ) : (
                 <>
+                    {/* Grading Mode Toggle */}
+                    <div className="card mb-lg" style={{ padding: 'var(--space-md)' }}>
+                        <div className="flex items-center gap-lg">
+                            <span style={{ fontWeight: 500 }}>โหมดให้คะแนน:</span>
+                            <div className="flex gap-sm">
+                                <button
+                                    className={`btn ${gradingMode === 'individual' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setGradingMode('individual')}
+                                    style={{ padding: '0.4rem 1rem' }}
+                                >
+                                    👤 รายบุคคล
+                                </button>
+                                <button
+                                    className={`btn ${gradingMode === 'group' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setGradingMode('group')}
+                                    disabled={groupSets.length === 0}
+                                    style={{ padding: '0.4rem 1rem' }}
+                                    title={groupSets.length === 0 ? 'ยังไม่มีรอบการจัดกลุ่ม' : ''}
+                                >
+                                    👥 กลุ่ม
+                                </button>
+                            </div>
+                            {groupSets.length === 0 && (
+                                <span className="text-muted" style={{ fontSize: '0.85rem' }}>
+                                    (<a href="/teacher/groups">สร้างกลุ่มก่อน</a>)
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Group Grading Mode */}
+                    {gradingMode === 'group' && (
+                        <div className="card mb-lg">
+                            <div className="card-header">
+                                <h3 className="card-title">ให้คะแนนแบบกลุ่ม</h3>
+                            </div>
+
+                            <div style={{ padding: 'var(--space-md)' }}>
+                                {/* Select Group Set */}
+                                <div className="flex gap-md mb-md flex-wrap items-center">
+                                    <div className="form-group" style={{ margin: 0 }}>
+                                        <label className="form-label">รอบ</label>
+                                        <select
+                                            className="form-input form-select"
+                                            value={selectedGroupSet?.id || ''}
+                                            onChange={(e) => {
+                                                const set = groupSets.find(s => s.id === e.target.value);
+                                                setSelectedGroupSet(set || null);
+                                            }}
+                                            style={{ minWidth: '180px' }}
+                                        >
+                                            {groupSets.map(set => (
+                                                <option key={set.id} value={set.id}>{set.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="form-group" style={{ margin: 0 }}>
+                                        <label className="form-label">หมวดคะแนน</label>
+                                        <select
+                                            className="form-input form-select"
+                                            value={groupGradeCategory}
+                                            onChange={(e) => setGroupGradeCategory(e.target.value)}
+                                            style={{ minWidth: '200px' }}
+                                        >
+                                            <option value="">-- เลือกหมวด --</option>
+                                            {categories.map(cat => (
+                                                <option key={cat.id} value={cat.id}>
+                                                    {cat.name} ({cat.maxScore} คะแนน)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {loadingGroups ? (
+                                    <div className="text-center text-muted" style={{ padding: '2rem' }}>
+                                        กำลังโหลดกลุ่ม...
+                                    </div>
+                                ) : groups.length === 0 ? (
+                                    <div className="text-center text-muted" style={{ padding: '2rem' }}>
+                                        ยังไม่มีกลุ่มในรอบนี้
+                                        <br />
+                                        <a href="/teacher/groups" className="btn btn-primary mt-md">
+                                            ไปจัดกลุ่ม
+                                        </a>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex flex-col gap-sm">
+                                            {groups.map(group => (
+                                                <div
+                                                    key={group.id}
+                                                    className="flex items-center gap-md"
+                                                    style={{
+                                                        padding: 'var(--space-md)',
+                                                        background: 'var(--bg-glass)',
+                                                        borderRadius: 'var(--radius-md)',
+                                                        borderLeft: `4px solid ${group.color || '#6366F1'}`
+                                                    }}
+                                                >
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: 500 }}>{group.name}</div>
+                                                        <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                                                            {(group.studentIds || []).length} คน
+                                                        </div>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        className="form-input"
+                                                        placeholder="คะแนน"
+                                                        value={groupGradeInputs[group.id] || ''}
+                                                        onChange={(e) => setGroupGradeInputs(prev => ({
+                                                            ...prev,
+                                                            [group.id]: e.target.value
+                                                        }))}
+                                                        style={{ width: '100px', textAlign: 'center' }}
+                                                        step="0.5"
+                                                        min="0"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex justify-center mt-lg">
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={handleSaveGroupGrades}
+                                                disabled={savingGroupGrades || !groupGradeCategory}
+                                            >
+                                                {savingGroupGrades ? 'กำลังบันทึก...' : '💾 บันทึกคะแนน'}
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Categories Section */}
                     <div className="card mb-lg">
                         <div className="card-header">

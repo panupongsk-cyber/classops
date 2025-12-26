@@ -86,5 +86,17 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow update, delete: if isAdmin();
     }
+    
+    // Group Sets collection (rounds of grouping)
+    match /group_sets/{setId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isTeacher();
+    }
+    
+    // Student Groups collection
+    match /student_groups/{groupId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isTeacher();
+    }
   }
 }

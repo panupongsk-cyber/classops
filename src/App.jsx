@@ -15,6 +15,7 @@ import Students from './pages/teacher/Students';
 import Settings from './pages/teacher/Settings';
 import CourseDashboard from './pages/teacher/CourseDashboard';
 import GradesPage from './pages/teacher/GradesPage';
+import GroupsPage from './pages/teacher/GroupsPage';
 
 // Student Pages
 import ScanPage from './pages/student/ScanPage';
@@ -203,6 +204,16 @@ export default function App() {
                     <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                         <AppLayout>
                             <GradesPage />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/teacher/groups"
+                element={
+                    <ProtectedRoute allowedRoles={['admin', 'teacher']}>
+                        <AppLayout>
+                            <GroupsPage />
                         </AppLayout>
                     </ProtectedRoute>
                 }

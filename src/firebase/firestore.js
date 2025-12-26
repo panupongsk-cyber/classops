@@ -1480,3 +1480,275 @@ export const getExitTicketStats = async (sessionId) => {
         return { count: 0, avgRating: 0 };
     }
 };
+
+// ============================================
+// Group Sets (รอบการจัดกลุ่ม)
+// ============================================
+
+export const createGroupSet = async (classroomId, name, description = '') => {
+    console.log('👥 createGroupSet:', { classroomId, name });
+
+    // Get current max order
+    const sets = await getGroupSets(classroomId);
+    const maxOrder = sets.length > 0
+        ? Math.max(...sets.map(s => s.order || 0)) + 1
+        : 0;
+
+    const docRef = await addDoc(collection(db, 'group_sets'), {
+        classroomId,
+        name,
+        description,
+        order: maxOrder,
+        createdAt: serverTimestamp()
+    });
+
+    console.log('👥 createGroupSet: Created', docRef.id);
+    return docRef.id;
+};
+
+export const getGroupSets = async (classroomId) => {
+    console.log('👥 getGroupSets:', classroomId);
+    try {
+        const q = query(
+            collection(db, 'group_sets'),
+            where('classroomId', '==', classroomId)
+        );
+        const snapshot = await getDocs(q);
+        const sets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Sort by order
+        sets.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        console.log('👥 getGroupSets: Found', sets.length);
+        return sets;
+    } catch (error) {
+        console.error('👥 getGroupSets: Error', error);
+        return [];
+    }
+};
+
+export const updateGroupSet = async (setId, data) => {
+    console.log('👥 updateGroupSet:', setId, data);
+    const docRef = doc(db, 'group_sets', setId);
+    await updateDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp()
+    });
+};
+
+export const deleteGroupSet = async (setId) => {
+    console.log('👥 deleteGroupSet:', setId);
+
+    // Delete all groups in this set first
+    const groupsQuery = query(
+        collection(db, 'student_groups'),
+        where('groupSetId', '==', setId)
+    );
+    const snapshot = await getDocs(groupsQuery);
+    const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
+
+    // Delete the set
+    const docRef = doc(db, 'group_sets', setId);
+    await deleteDoc(docRef);
+
+    console.log('👥 deleteGroupSet: Deleted with', snapshot.size, 'groups');
+};
+
+// ============================================
+// Student Groups (กลุ่มนิสิต)
+// ============================================
+
+export const createStudentGroup = async (classroomId, groupSetId, name, color = '#6366F1') => {
+    console.log('👥 createStudentGroup:', { classroomId, groupSetId, name });
+
+    // Get current max order
+    const groups = await getStudentGroups(groupSetId);
+    const maxOrder = groups.length > 0
+        ? Math.max(...groups.map(g => g.order || 0)) + 1
+        : 0;
+
+    const docRef = await addDoc(collection(db, 'student_groups'), {
+        classroomId,
+        groupSetId,
+        name,
+        color,
+        studentIds: [],
+        studentEmails: [],
+        order: maxOrder,
+        createdAt: serverTimestamp()
+    });
+
+    console.log('👥 createStudentGroup: Created', docRef.id);
+    return docRef.id;
+};
+
+export const getStudentGroups = async (groupSetId) => {
+    console.log('👥 getStudentGroups:', groupSetId);
+    try {
+        const q = query(
+            collection(db, 'student_groups'),
+            where('groupSetId', '==', groupSetId)
+        );
+        const snapshot = await getDocs(q);
+        const groups = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Sort by order
+        groups.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        console.log('👥 getStudentGroups: Found', groups.length);
+        return groups;
+    } catch (error) {
+        console.error('👥 getStudentGroups: Error', error);
+        return [];
+    }
+};
+
+export const updateStudentGroup = async (groupId, data) => {
+    console.log('👥 updateStudentGroup:', groupId, data);
+    const docRef = doc(db, 'student_groups', groupId);
+    await updateDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp()
+    });
+};
+
+export const deleteStudentGroup = async (groupId) => {
+    console.log('👥 deleteStudentGroup:', groupId);
+    const docRef = doc(db, 'student_groups', groupId);
+    await deleteDoc(docRef);
+};
+
+export const addStudentsToGroup = async (groupId, students) => {
+    console.log('👥 addStudentsToGroup:', groupId, students.length, 'students');
+    const docRef = doc(db, 'student_groups', groupId);
+    const snapshot = await getDoc(docRef);
+
+    if (!snapshot.exists()) {
+        throw new Error('Group not found');
+    }
+
+    const data = snapshot.data();
+    const studentIds = new Set(data.studentIds || []);
+    const studentEmails = new Set(data.studentEmails || []);
+
+    for (const student of students) {
+        studentIds.add(student.studentId);
+        if (student.email) {
+            studentEmails.add(student.email.toLowerCase());
+        }
+    }
+
+    await updateDoc(docRef, {
+        studentIds: Array.from(studentIds),
+        studentEmails: Array.from(studentEmails),
+        updatedAt: serverTimestamp()
+    });
+
+    console.log('👥 addStudentsToGroup: Success');
+};
+
+export const removeStudentFromGroup = async (groupId, studentId, studentEmail = null) => {
+    console.log('👥 removeStudentFromGroup:', groupId, studentId);
+    const docRef = doc(db, 'student_groups', groupId);
+    const snapshot = await getDoc(docRef);
+
+    if (!snapshot.exists()) {
+        throw new Error('Group not found');
+    }
+
+    const data = snapshot.data();
+    let studentIds = data.studentIds || [];
+    let studentEmails = data.studentEmails || [];
+
+    studentIds = studentIds.filter(id => id !== studentId);
+    if (studentEmail) {
+        studentEmails = studentEmails.filter(e => e !== studentEmail.toLowerCase());
+    }
+
+    await updateDoc(docRef, {
+        studentIds,
+        studentEmails,
+        updatedAt: serverTimestamp()
+    });
+
+    console.log('👥 removeStudentFromGroup: Success');
+};
+
+// ============================================
+// Group Grading
+// ============================================
+
+export const saveGroupGrades = async (classroomId, categoryId, groupId, score, teacherEmail) => {
+    console.log('👥 saveGroupGrades:', { classroomId, categoryId, groupId, score });
+
+    // Get group members
+    const groupDoc = await getDoc(doc(db, 'student_groups', groupId));
+    if (!groupDoc.exists()) {
+        throw new Error('Group not found');
+    }
+
+    const group = groupDoc.data();
+    const studentIds = group.studentIds || [];
+
+    if (studentIds.length === 0) {
+        throw new Error('กลุ่มนี้ยังไม่มีสมาชิก');
+    }
+
+    // Get student details from classroom
+    const studentsData = await getStudents(classroomId);
+    const studentsMap = new Map(studentsData.map(s => [s.studentId, s]));
+
+    const results = { saved: 0, updated: 0, errors: [] };
+
+    for (const studentId of studentIds) {
+        const student = studentsMap.get(studentId);
+        if (!student) {
+            results.errors.push({ studentId, error: 'Student not found' });
+            continue;
+        }
+
+        try {
+            // Check if grade already exists
+            const existingQuery = query(
+                collection(db, 'grades'),
+                where('categoryId', '==', categoryId),
+                where('studentId', '==', studentId)
+            );
+            const existing = await getDocs(existingQuery);
+
+            if (!existing.empty) {
+                // Update existing
+                const docRef = existing.docs[0].ref;
+                await updateDoc(docRef, {
+                    score: Number(score) || 0,
+                    groupId, // Track which group graded
+                    updatedAt: serverTimestamp(),
+                    updatedBy: teacherEmail
+                });
+                results.updated++;
+            } else {
+                // Create new
+                await addDoc(collection(db, 'grades'), {
+                    classroomId,
+                    categoryId,
+                    studentId,
+                    studentEmail: student.email?.toLowerCase() || '',
+                    studentName: student.name || '',
+                    score: Number(score) || 0,
+                    groupId, // Track which group graded
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    updatedBy: teacherEmail
+                });
+                results.saved++;
+            }
+        } catch (error) {
+            console.error('Error saving grade for', studentId, error);
+            results.errors.push({ studentId, error: error.message });
+        }
+    }
+
+    console.log('👥 saveGroupGrades: Results', results);
+    return results;
+};
