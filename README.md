@@ -1,51 +1,69 @@
-# ClassOps - Attendance Management System
+# ClassOps - All-in-One Classroom Operating System
 
-## Version 1.0.0 (December 2024)
+## Version 1.1.0 (April 2026)
 
-ระบบเช็คชื่อเข้าเรียนด้วย QR Code พร้อมระบบจัดการคะแนนสำหรับมหาวิทยาลัย
+ClassOps is a unified classroom management system designed to consolidate multiple platforms (LMS, Teams, Quizzes, Programming) into a single, interactive hub.
 
-🌐 **Live:** https://attendance-13d17.web.app
+🌐 **Live:** [Your Deployment URL]
 
 ---
 
 ## ✨ Features
 
-### สำหรับผู้ดูแลระบบ (Admin)
-- ✅ จัดการอาจารย์ (เพิ่ม/ลบ)
-- ✅ ดูประวัติการเช็คชื่อทั้งระบบ
-- ✅ ลบ session ใดก็ได้
+### 📰 Class Feed (New!)
+- **Unified Timeline:** Replaces Teams/Moodle for announcements, resources, and assignments.
+- **Rich Post Types:** Supports text announcements, file attachments (PDFs/Images), and interactive links.
+- **Real-time Interaction:** Instant updates for students when a teacher posts new content.
+- **Engagement:** Built-in "Likes" and "Comments" for contextual Q&A.
 
-### สำหรับอาจารย์ (Teacher)
-- ✅ สร้าง/จัดการคลาสเรียน (รองรับหลายอาจารย์ต่อคลาส)
-- ✅ จัดการรายชื่อนักศึกษา (เรียงตามชื่อ/รหัส)
-- ✅ เปิด Session เช็คชื่อด้วย QR Code + Emoji Challenge + GPS
-- ✅ สุ่มเลือกนักศึกษา (Random Name Picker)
-- ✅ เพิ่ม/แก้ไขการเช็คชื่อหลัง Session (Manual Check-in/Leave)
-- ✅ ระบบคะแนน (Grades) พร้อม Feedback และ Export CSV
-- ✅ **Exit Ticket** - รับ feedback จากนักศึกษาหลังเรียน
-  - เปิดอัตโนมัติเมื่อเริ่ม session
-  - หมดเวลาใน 24 ชั่วโมง หรืออาจารย์ปิดก่อนได้
-  - ดูสถิติ (avg rating, distribution) + Export CSV
+### 🎓 LMS & Attendance
+- **Dynamic Roster:** Student management with easy enrollment.
+- **Attendance System:** QR Code + Emoji Challenge + GPS-verified check-ins.
+- **Exit Tickets:** Real-time feedback loop after every class session.
+- **Random Picker:** Interactive student selection for classroom engagement.
 
-### สำหรับนักศึกษา (Student)
-- ✅ Scan QR เช็คชื่อ + Emoji Challenge
-- ✅ ดูประวัติการเช็คชื่อ
-- ✅ ดูคะแนน + feedback จากอาจารย์
-- ✅ **ส่ง Exit Ticket** - ให้คะแนน 1-10 + ระบุเหตุผล + Key Takeaway
+### 📊 Grading & Analytics
+- **Assignment Workflow:** Manage submissions and provide feedback directly in the app.
+- **Gradebook:** Comprehensive view of student performance with CSV export.
+- **Stats Dashboard:** Visual analytics for attendance and engagement.
 
 ---
 
 ## 🛠️ Tech Stack
-- **Frontend:** React + Vite
-- **Backend:** Firebase (Auth, Firestore)
-- **Hosting:** Firebase Hosting
+- **Frontend:** React + Vite + Tailwind CSS
+- **Backend:** Firebase (Auth, Firestore, Storage)
+- **Real-time:** Firestore Listeners
+- **Integration:** Deep-linking with **OmniQuizOps**
+
+---
+
+## 🚀 Getting Started
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/panupongsk-cyber/classops.git
+   cd classops
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Firebase:**
+   Create a `.env` file based on `.env.example` and add your Firebase project credentials.
+
+4. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
 
 ---
 
 ## 📝 Changelog
 
-### v1.0.0 (2024-12-17)
-- Initial stable release
-- Exit Ticket feature with hybrid UX (notification + history page)
-- Auto-enabled exit ticket with 24hr deadline
-- Multiple fixes for Firestore rules and queries
+### v1.1.0 (2026-04-15)
+- **Feature:** Introduced **Class Feed** for unified classroom communication.
+- **Branding:** Rebranded from "Attendance" to **ClassOps**.
+- **Security:** Moved Firebase configuration to environment variables.
+- **UI:** Added navigation tabs for "Feed" and "Attendance" for both Teachers and Students.

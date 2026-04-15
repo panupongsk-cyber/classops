@@ -110,23 +110,23 @@ export default function Navbar() {
         { path: '/teacher/students', icon: <UsersIcon />, label: 'นักศึกษา' },
         { path: '/teacher/groups', icon: <GroupIcon />, label: 'กลุ่ม' },
         { path: '/teacher/grades', icon: <GradesIcon />, label: 'คะแนน' },
-        { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'สถิติ' },
+        { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'กิจกรรม' },
     ];
 
     // Teacher navigation items
     const teacherNavItems = [
-        { path: '/teacher', icon: <DashboardIcon />, label: 'Dashboard', exact: true },
+        { path: '/teacher', icon: <DashboardIcon />, label: 'เช็คชื่อ', exact: true },
         { path: '/teacher/classrooms', icon: <ClassroomIcon />, label: 'รายวิชา' },
         { path: '/teacher/students', icon: <UsersIcon />, label: 'นักศึกษา' },
         { path: '/teacher/groups', icon: <GroupIcon />, label: 'กลุ่ม' },
         { path: '/teacher/grades', icon: <GradesIcon />, label: 'คะแนน' },
-        { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'สถิติ' },
+        { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'กิจกรรม' },
         { path: '/teacher/settings', icon: <SettingsIcon />, label: 'ตั้งค่า' },
     ];
 
     // Student navigation items
     const studentNavItems = [
-        { path: '/student', icon: <HistoryIcon />, label: 'ประวัติ', exact: true },
+        { path: '/student', icon: <HistoryIcon />, label: 'ฟีดชั้นเรียน', exact: true },
         { path: '/student/grades', icon: <GradesIcon />, label: 'คะแนน' },
     ];
 

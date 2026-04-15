@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/firebase';
 import { useAuth } from '../../context/AuthContext';
-import { getExitTicketByStudent, submitExitTicket, isExitTicketOpen } from '../../firebase/firestore';
+import { getExitTicketByStudent, submitExitTicket, isExitTicketOpen, getStudentClassrooms } from '../../firebase/firestore';
 import ExitTicketModal from '../../components/ExitTicketModal';
+import Feed from '../../components/feed/Feed';
 
 export default function History() {
     const { user } = useAuth();
     const [attendance, setAttendance] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'attendance'
+    const [classrooms, setClassrooms] = useState([]);
+    const [selectedClassroom, setSelectedClassroom] = useState(null);
 
     // Exit ticket state
     const [exitTicketModalOpen, setExitTicketModalOpen] = useState(false);
@@ -20,6 +24,13 @@ export default function History() {
             if (!user?.email) return;
 
             try {
+                // Load classrooms the student is enrolled in
+                const studentClassrooms = await getStudentClassrooms(user.email);
+                setClassrooms(studentClassrooms);
+                if (studentClassrooms.length > 0) {
+                    setSelectedClassroom(studentClassrooms[0]);
+                }
+
                 console.log('📚 Loading attendance history for:', user.email);
                 const q = query(
                     collection(db, 'attendance'),
@@ -173,26 +184,82 @@ export default function History() {
                     </div>
                 </div>
 
-                {/* Attendance List */}
-                <div className="card">
-                    <div className="card-header">
-                        <h3 className="card-title">รายการเช็คชื่อ</h3>
-                    </div>
+                {/* View Toggle Tabs */}
+                <div className="flex gap-md mb-lg border-b pb-sm">
+                    <button
+                        className={`btn-tab ${activeTab === 'feed' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('feed')}
+                        style={{ 
+                            padding: '0.5rem 1rem', 
+                            border: 'none', 
+                            background: 'none', 
+                            borderBottom: activeTab === 'feed' ? '3px solid var(--primary-color)' : '3px solid transparent',
+                            fontWeight: activeTab === 'feed' ? 'bold' : 'normal',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        📰 ฟีดชั้นเรียน
+                    </button>
+                    <button
+                        className={`btn-tab ${activeTab === 'attendance' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('attendance')}
+                        style={{ 
+                            padding: '0.5rem 1rem', 
+                            border: 'none', 
+                            background: 'none', 
+                            borderBottom: activeTab === 'attendance' ? '3px solid var(--primary-color)' : '3px solid transparent',
+                            fontWeight: activeTab === 'attendance' ? 'bold' : 'normal',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        📊 ประวัติการเข้าเรียน
+                    </button>
+                </div>
 
-                    {attendance.length === 0 ? (
-                        <div className="empty-state">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                            <p>ยังไม่มีประวัติการเช็คชื่อ</p>
-                            <p className="text-muted" style={{ fontSize: '0.9rem' }}>
-                                Scan QR Code ที่อาจารย์แสดงเพื่อเช็คชื่อ
-                            </p>
+                {activeTab === 'feed' ? (
+                    <div className="feed-view">
+                        {classrooms.length > 0 ? (
+                            <>
+                                <div className="mb-md">
+                                    <label className="text-sm text-muted mb-xs block">เลือกชั้นเรียน:</label>
+                                    <select 
+                                        className="form-input" 
+                                        value={selectedClassroom?.id || ''}
+                                        onChange={(e) => setSelectedClassroom(classrooms.find(c => c.id === e.target.value))}
+                                    >
+                                        {classrooms.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <Feed classroomId={selectedClassroom?.id} />
+                            </>
+                        ) : (
+                            <div className="card text-center py-xl">
+                                <p className="text-muted">คุณยังไม่ได้ลงทะเบียนในชั้นเรียนใดๆ</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="card">
+                        <div className="card-header">
+                            <h3 className="card-title">รายการเช็คชื่อ</h3>
                         </div>
-                    ) : (
-                        <div className="flex flex-col gap-sm">
-                            {attendance.map((item) => {
+
+                        {attendance.length === 0 ? (
+                            <div className="empty-state">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <polyline points="12 6 12 12 16 14" />
+                                </svg>
+                                <p>ยังไม่มีประวัติการเช็คชื่อ</p>
+                                <p className="text-muted" style={{ fontSize: '0.9rem' }}>
+                                    Scan QR Code ที่อาจารย์แสดงเพื่อเช็คชื่อ
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-sm">
+                                {attendance.map((item) => {
                                 const status = exitTicketStatus[item.sessionId];
                                 const canSubmit = status?.open && !status?.submitted;
 
@@ -252,6 +319,7 @@ export default function History() {
                         </div>
                     )}
                 </div>
+                )}
             </div>
 
             {/* Exit Ticket Modal */}

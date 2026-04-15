@@ -1,14 +1,11 @@
-// Firebase configuration for LOCAL TESTING
-// Using demo project ID for Firebase Emulators
-
 const firebaseConfig = {
-    apiKey: "AIzaSyCh-wpcQJflz_4p3cbaBFFTm9mLnR91hAA",
-    authDomain: "attendance-13d17.firebaseapp.com",
-    projectId: "attendance-13d17",
-    storageBucket: "attendance-13d17.firebasestorage.app",
-    messagingSenderId: "624259998804",
-    appId: "1:624259998804:web:a699ceb5865d0aaa0079c1",
-    measurementId: "G-SE9BBFJ0FQ"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 export default firebaseConfig;

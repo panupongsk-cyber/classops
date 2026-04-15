@@ -38,8 +38,14 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if isTeacher();
       allow update, delete: if request.auth != null && (
-        request.auth.uid in resource.data.teacherIds || isAdmin()
+        (resource.data.teacherIds != null && request.auth.uid in resource.data.teacherIds) || isAdmin()
       );
+
+      // Posts sub-collection
+      match /posts/{postId} {
+        allow read: if request.auth != null;
+        allow create, update, delete: if isTeacher();
+      }
     }
     
     // Students collection

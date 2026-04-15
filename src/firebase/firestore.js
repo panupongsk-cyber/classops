@@ -1752,3 +1752,89 @@ export const saveGroupGrades = async (classroomId, categoryId, groupId, score, t
     console.log('👥 saveGroupGrades: Results', results);
     return results;
 };
+
+// ============================================
+// Class Feed (Posts)
+// ============================================
+
+export const getPosts = (classroomId, callback) => {
+    if (!classroomId) return () => {};
+    const postsRef = collection(db, 'classrooms', classroomId, 'posts');
+    const q = query(postsRef, orderBy('createdAt', 'desc'));
+    
+    return onSnapshot(q, (snapshot) => {
+        const posts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        callback(posts);
+    }, (error) => {
+        console.error("Error fetching posts:", error);
+    });
+};
+
+export const createPost = async (classroomId, postData) => {
+    try {
+        const postsRef = collection(db, 'classrooms', classroomId, 'posts');
+        const docRef = await addDoc(postsRef, {
+            ...postData,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            interactions: {
+                likes: [],
+                commentsCount: 0
+            }
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error("Error creating post:", error);
+        throw error;
+    }
+};
+
+export const deletePost = async (classroomId, postId) => {
+    try {
+        const postRef = doc(db, 'classrooms', classroomId, 'posts', postId);
+        await deleteDoc(postRef);
+    } catch (error) {
+        console.error("Error deleting post:", error);
+        throw error;
+    }
+};
+
+export const updatePost = async (classroomId, postId, postData) => {
+    try {
+        const postRef = doc(db, 'classrooms', classroomId, 'posts', postId);
+        await updateDoc(postRef, {
+            ...postData,
+            updatedAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error updating post:", error);
+        throw error;
+    }
+};
+
+export const getStudentClassrooms = async (studentEmail) => {
+    try {
+        const q = query(
+            collection(db, 'students'),
+            where('email', '==', studentEmail.toLowerCase())
+        );
+        const snapshot = await getDocs(q);
+        const studentDocs = snapshot.docs.map(doc => doc.data());
+        const classroomIds = [...new Set(studentDocs.map(s => s.classroomId))];
+        
+        const classrooms = [];
+        for (const id of classroomIds) {
+            const classroomDoc = await getDoc(doc(db, 'classrooms', id));
+            if (classroomDoc.exists()) {
+                classrooms.push({ id: classroomDoc.id, ...classroomDoc.data() });
+            }
+        }
+        return classrooms;
+    } catch (error) {
+        console.error('Error getting student classrooms:', error);
+        return [];
+    }
+};

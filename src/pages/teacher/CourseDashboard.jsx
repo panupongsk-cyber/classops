@@ -17,11 +17,13 @@ import {
 import RandomNamePicker from '../../components/RandomNamePicker';
 import SessionAttendanceModal from '../../components/SessionAttendanceModal';
 import ExitTicketResultsModal from '../../components/ExitTicketResultsModal';
+import Feed from '../../components/feed/Feed';
 
 export default function CourseDashboard() {
     const { user, userRole } = useAuth();
     const [classrooms, setClassrooms] = useState([]);
     const [selectedClassroom, setSelectedClassroom] = useState(null);
+    const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'attendance'
     const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingSessions, setLoadingSessions] = useState(false);
@@ -376,24 +378,58 @@ export default function CourseDashboard() {
                 </div>
             </div>
 
-            {/* Sessions List */}
-            <div className="card">
-                <div className="card-header">
-                    <h3 className="card-title">ประวัติการเช็คชื่อ</h3>
-                </div>
+            {/* View Toggle Tabs */}
+            <div className="flex gap-md mb-lg border-b pb-sm">
+                <button
+                    className={`btn-tab ${activeTab === 'feed' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('feed')}
+                    style={{ 
+                        padding: '0.5rem 1.5rem', 
+                        border: 'none', 
+                        background: 'none', 
+                        borderBottom: activeTab === 'feed' ? '3px solid var(--primary-color)' : '3px solid transparent',
+                        fontWeight: activeTab === 'feed' ? 'bold' : 'normal',
+                        cursor: 'pointer'
+                    }}
+                >
+                    📰 ฟีดชั้นเรียน
+                </button>
+                <button
+                    className={`btn-tab ${activeTab === 'attendance' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('attendance')}
+                    style={{ 
+                        padding: '0.5rem 1.5rem', 
+                        border: 'none', 
+                        background: 'none', 
+                        borderBottom: activeTab === 'attendance' ? '3px solid var(--primary-color)' : '3px solid transparent',
+                        fontWeight: activeTab === 'attendance' ? 'bold' : 'normal',
+                        cursor: 'pointer'
+                    }}
+                >
+                    📊 การเข้าเรียน
+                </button>
+            </div>
 
-                {loadingSessions ? (
-                    <div className="text-center" style={{ padding: '2rem' }}>
-                        <p className="text-muted">กำลังโหลด...</p>
+            {activeTab === 'feed' ? (
+                <Feed classroomId={selectedClassroom?.id} />
+            ) : (
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="card-title">ประวัติการเช็คชื่อ</h3>
                     </div>
-                ) : sessions.length === 0 ? (
-                    <div className="text-center" style={{ padding: '2rem' }}>
-                        <p className="text-muted">ยังไม่มีประวัติการเช็คชื่อ</p>
-                    </div>
-                ) : (
-                    <div className="session-list">
-                        {sessions.map((session, index) => (
-                            <div key={session.id} className="session-item">
+
+                    {loadingSessions ? (
+                        <div className="text-center" style={{ padding: '2rem' }}>
+                            <p className="text-muted">กำลังโหลด...</p>
+                        </div>
+                    ) : sessions.length === 0 ? (
+                        <div className="text-center" style={{ padding: '2rem' }}>
+                            <p className="text-muted">ยังไม่มีประวัติการเช็คชื่อ</p>
+                        </div>
+                    ) : (
+                        <div className="session-list">
+                            {sessions.map((session, index) => (
+                                <div key={session.id} className="session-item">
                                 <div
                                     className="session-header"
                                     onClick={() => handleExpandSession(session)}
@@ -581,6 +617,7 @@ export default function CourseDashboard() {
                     </div>
                 )}
             </div>
+            )}
 
             {/* Random Picker Modal */}
             <RandomNamePicker
