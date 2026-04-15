@@ -16,12 +16,14 @@ import Settings from './pages/teacher/Settings';
 import CourseDashboard from './pages/teacher/CourseDashboard';
 import GradesPage from './pages/teacher/GradesPage';
 import GroupsPage from './pages/teacher/GroupsPage';
+import ClassroomHub from './pages/teacher/ClassroomHub';
 
 // Student Pages
 import ScanPage from './pages/student/ScanPage';
 import History from './pages/student/History';
 import CheckInPage from './pages/student/CheckInPage';
 import StudentGrades from './pages/student/StudentGrades';
+import StudentClassroomHub from './pages/student/ClassroomHub';
 
 // Protected Route Component
 function ProtectedRoute({ children, allowedRoles }) {
@@ -219,6 +221,17 @@ export default function App() {
                 }
             />
 
+            <Route
+                path="/teacher/class/:id"
+                element={
+                    <ProtectedRoute allowedRoles={['admin', 'teacher']}>
+                        <AppLayout>
+                            <ClassroomHub />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+
             {/* Student Routes */}
             <Route
                 path="/student"
@@ -226,6 +239,16 @@ export default function App() {
                     <ProtectedRoute allowedRoles={['student']}>
                         <AppLayout>
                             <History />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/student/class/:id"
+                element={
+                    <ProtectedRoute allowedRoles={['student']}>
+                        <AppLayout>
+                            <StudentClassroomHub />
                         </AppLayout>
                     </ProtectedRoute>
                 }

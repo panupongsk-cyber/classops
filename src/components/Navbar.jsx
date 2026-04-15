@@ -105,29 +105,18 @@ export default function Navbar() {
     const adminNavItems = [
         { path: '/admin', icon: <DashboardIcon />, label: 'Admin', exact: true },
         { path: '/admin/teachers', icon: <UsersIcon />, label: 'อาจารย์' },
-        { path: '/teacher', icon: <DashboardIcon />, label: 'เช็คชื่อ', exact: true },
-        { path: '/teacher/classrooms', icon: <ClassroomIcon />, label: 'รายวิชา' },
-        { path: '/teacher/students', icon: <UsersIcon />, label: 'นักศึกษา' },
-        { path: '/teacher/groups', icon: <GroupIcon />, label: 'กลุ่ม' },
-        { path: '/teacher/grades', icon: <GradesIcon />, label: 'คะแนน' },
-        { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'กิจกรรม' },
+        { path: '/teacher', icon: <DashboardIcon />, label: 'หน้าแรก', exact: true },
     ];
 
     // Teacher navigation items
     const teacherNavItems = [
-        { path: '/teacher', icon: <DashboardIcon />, label: 'เช็คชื่อ', exact: true },
-        { path: '/teacher/classrooms', icon: <ClassroomIcon />, label: 'รายวิชา' },
-        { path: '/teacher/students', icon: <UsersIcon />, label: 'นักศึกษา' },
-        { path: '/teacher/groups', icon: <GroupIcon />, label: 'กลุ่ม' },
-        { path: '/teacher/grades', icon: <GradesIcon />, label: 'คะแนน' },
-        { path: '/teacher/course-stats', icon: <HistoryIcon />, label: 'กิจกรรม' },
+        { path: '/teacher', icon: <DashboardIcon />, label: 'รายวิชา', exact: true },
         { path: '/teacher/settings', icon: <SettingsIcon />, label: 'ตั้งค่า' },
     ];
 
     // Student navigation items
     const studentNavItems = [
-        { path: '/student', icon: <HistoryIcon />, label: 'ฟีดชั้นเรียน', exact: true },
-        { path: '/student/grades', icon: <GradesIcon />, label: 'คะแนน' },
+        { path: '/student', icon: <DashboardIcon />, label: 'หน้าแรก', exact: true },
     ];
 
     // Select nav items based on role
@@ -173,16 +162,30 @@ export default function Navbar() {
         }
     };
 
+    const isInsideHub = location.pathname.includes('/class/');
+
     if (!user) return null;
 
     return (
         <nav className="navbar">
             <div className="container navbar-content">
-                <Link to={homePath} className="navbar-brand">
-                    {userRole === 'admin' ? <ShieldIcon /> : <QRIcon />}
-                    <span>ClassOps</span>
-                    {getRoleBadge()}
-                </Link>
+                <div className="flex items-center gap-md">
+                    {isInsideHub && (
+                        <button 
+                            onClick={() => navigate(homePath)} 
+                            className="btn-text" 
+                            style={{ padding: '0.5rem', marginRight: '0.5rem' }}
+                            title="กลับไปหน้าหลัก"
+                        >
+                            🏠
+                        </button>
+                    )}
+                    <Link to={homePath} className="navbar-brand">
+                        {userRole === 'admin' ? <ShieldIcon /> : <QRIcon />}
+                        <span>ClassOps</span>
+                        {getRoleBadge()}
+                    </Link>
+                </div>
 
                 <div className="navbar-nav">
                     {navItems.map((item) => (

@@ -107,8 +107,7 @@ export default function AttendanceList({
                                 </div>
                             </div>
                             <span
-                                className="attendance-badge"
-                                style={{ background: badge.color }}
+                                className={`attendance-badge badge-${item.type || 'scan'}`}
                             >
                                 {badge.text}
                             </span>

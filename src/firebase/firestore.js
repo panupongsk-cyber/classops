@@ -1757,20 +1757,27 @@ export const saveGroupGrades = async (classroomId, categoryId, groupId, score, t
 // Class Feed (Posts)
 // ============================================
 
-export const getPosts = (classroomId, callback) => {
+export const getPosts = (classroomId, callback, errorCallback) => {
     if (!classroomId) return () => {};
-    const postsRef = collection(db, 'classrooms', classroomId, 'posts');
-    const q = query(postsRef, orderBy('createdAt', 'desc'));
-    
-    return onSnapshot(q, (snapshot) => {
-        const posts = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-        callback(posts);
-    }, (error) => {
-        console.error("Error fetching posts:", error);
-    });
+    try {
+        const postsRef = collection(db, 'classrooms', classroomId, 'posts');
+        const q = query(postsRef, orderBy('createdAt', 'desc'));
+        
+        return onSnapshot(q, (snapshot) => {
+            const posts = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            callback(posts);
+        }, (error) => {
+            console.error("Error fetching posts:", error);
+            if (errorCallback) errorCallback(error);
+        });
+    } catch (error) {
+        console.error("Setup posts subscription failed:", error);
+        if (errorCallback) errorCallback(error);
+        return () => {};
+    }
 };
 
 export const createPost = async (classroomId, postData) => {

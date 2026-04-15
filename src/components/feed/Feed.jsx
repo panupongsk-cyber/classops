@@ -10,10 +10,17 @@ export default function Feed({ classroomId }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!classroomId) return;
+        if (!classroomId) {
+            setLoading(false);
+            return;
+        }
         
+        setLoading(true);
         const unsubscribe = getPosts(classroomId, (data) => {
             setPosts(data);
+            setLoading(false);
+        }, (error) => {
+            console.error("Feed subscription error:", error);
             setLoading(false);
         });
 
@@ -22,8 +29,17 @@ export default function Feed({ classroomId }) {
 
     if (loading) {
         return (
-            <div className="text-center py-xl">
-                <p className="text-muted">กำลังโหลดฟีด...</p>
+            <div className="text-center py-xl card">
+                <div className="spinner mb-md"></div>
+                <p className="text-muted">กำลังโหลดฟีดชั้นเรียน...</p>
+            </div>
+        );
+    }
+
+    if (!classroomId) {
+        return (
+            <div className="card text-center py-xl">
+                <p className="text-muted">กรุณาเลือกชั้นเรียนเพื่อดูฟีด</p>
             </div>
         );
     }

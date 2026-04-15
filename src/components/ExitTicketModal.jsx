@@ -94,7 +94,7 @@ export default function ExitTicketModal({
                             width: '100%',
                             height: '8px',
                             borderRadius: '4px',
-                            background: `linear-gradient(to right, ${getRatingColor(rating)} ${rating * 10}%, var(--bg-glass) ${rating * 10}%)`,
+                            background: `linear-gradient(to right, ${getRatingColor(rating)} ${rating * 10}%, var(--bg-secondary) ${rating * 10}%)`,
                             cursor: 'pointer'
                         }}
                     />

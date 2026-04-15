@@ -36,13 +36,13 @@ export default function CreatePost({ classroomId }) {
         <div className="card mb-lg">
             <form onSubmit={handleSubmit}>
                 <textarea
-                    className="form-control mb-sm"
+                    className="form-input mb-sm"
                     placeholder="ประกาศอะไรบางอย่างให้ชั้นเรียนของคุณ..."
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     onFocus={() => setShowOptions(true)}
                     rows={showOptions ? 3 : 1}
-                    style={{ resize: 'none', border: 'none', padding: '0.5rem 0' }}
+                    style={{ resize: 'none', border: 'none', background: 'transparent', color: 'inherit' }}
                 />
                 
                 {showOptions && (
