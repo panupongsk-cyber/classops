@@ -334,19 +334,15 @@ export const getStudentByEmail = async (classroomId, email) => {
     try {
         console.log('Looking for student:', { classroomId, email: email.toLowerCase() });
 
-        // Get all students in classroom and filter by email
-        // This avoids needing composite index
         const q = query(
             collection(db, 'students'),
-            where('classroomId', '==', classroomId)
+            where('classroomId', '==', classroomId),
+            where('email', '==', email.toLowerCase())
         );
         const snapshot = await getDocs(q);
 
-        console.log('Found students in classroom:', snapshot.docs.length);
-
-        const student = snapshot.docs.find(doc =>
-            doc.data().email?.toLowerCase() === email.toLowerCase()
-        );
+        console.log('Found matching students:', snapshot.docs.length);
+        const student = snapshot.docs[0];
 
         if (student) {
             console.log('Student found:', student.data());
@@ -549,9 +545,18 @@ export const recordAttendance = async (sessionId, studentData, token, classroomN
         throw new Error('คุณได้เช็คชื่อแล้วสำหรับคาบนี้');
     }
 
-    const docRef = await addDoc(collection(db, 'attendance'), {
+    const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
+    if (!sessionDoc.exists()) {
+        throw new Error('ไม่พบการเช็คชื่อนี้');
+    }
+
+    const classroomId = sessionDoc.data().classroomId;
+    const attendanceId = `${sessionId}_${studentData.email.toLowerCase()}`;
+    const docRef = doc(db, 'attendance', attendanceId);
+    await setDoc(docRef, {
         sessionId,
-        studentEmail: studentData.email,
+        classroomId,
+        studentEmail: studentData.email.toLowerCase(),
         studentId: studentData.studentId,
         studentName: studentData.name,
         classroomName: classroomName,
@@ -573,9 +578,16 @@ export const manualCheckIn = async (sessionId, studentData, classroomName = '', 
         throw new Error('นิสิตได้เช็คชื่อแล้วสำหรับคาบนี้');
     }
 
-    const docRef = await addDoc(collection(db, 'attendance'), {
+    const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
+    if (!sessionDoc.exists()) {
+        throw new Error('ไม่พบการเช็คชื่อนี้');
+    }
+
+    const docRef = doc(db, 'attendance', `${sessionId}_${studentData.email.toLowerCase()}`);
+    await setDoc(docRef, {
         sessionId,
-        studentEmail: studentData.email,
+        classroomId: sessionDoc.data().classroomId,
+        studentEmail: studentData.email.toLowerCase(),
         studentId: studentData.studentId,
         studentName: studentData.name,
         classroomName,
@@ -593,9 +605,16 @@ export const recordLeave = async (sessionId, studentData, classroomName = '', re
         throw new Error('นิสิตได้เช็คชื่อ/ลาแล้วสำหรับคาบนี้');
     }
 
-    const docRef = await addDoc(collection(db, 'attendance'), {
+    const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
+    if (!sessionDoc.exists()) {
+        throw new Error('ไม่พบการเช็คชื่อนี้');
+    }
+
+    const docRef = doc(db, 'attendance', `${sessionId}_${studentData.email.toLowerCase()}`);
+    await setDoc(docRef, {
         sessionId,
-        studentEmail: studentData.email,
+        classroomId: sessionDoc.data().classroomId,
+        studentEmail: studentData.email.toLowerCase(),
         studentId: studentData.studentId,
         studentName: studentData.name,
         classroomName,
@@ -1398,7 +1417,9 @@ export const submitExitTicket = async (sessionId, classroomId, studentData, rati
             throw new Error('คุณส่ง Exit Ticket ไปแล้ว');
         }
 
-        const docRef = await addDoc(collection(db, 'exit_tickets'), {
+        const ticketId = `${sessionId}_${studentData.email.toLowerCase()}`;
+        const docRef = doc(db, 'exit_tickets', ticketId);
+        await setDoc(docRef, {
             sessionId,
             classroomId: classroomId || '',
             studentId: studentData.studentId || '',
