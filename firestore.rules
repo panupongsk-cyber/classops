@@ -2,107 +2,168 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if user is admin
+    // Authentication and ownership helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'panupongs@nu.ac.th';
+      return isSignedIn() && request.auth.token.email == 'panupongs@nu.ac.th';
     }
     
     // Helper function to check if user is teacher
     function isTeacher() {
-      return request.auth != null && (
+      return isSignedIn() && (
         isAdmin() ||
         exists(/databases/$(database)/documents/allowed_teachers/$(request.auth.token.email))
       );
     }
+
+    function ownsEmail(email) {
+      return isSignedIn() && request.auth.token.email == email;
+    }
+
+    function managesClassroom(classroomId) {
+      return isAdmin() || (
+        isSignedIn() &&
+        get(/databases/$(database)/documents/classrooms/$(classroomId)).data.teacherIds != null &&
+        request.auth.uid in get(/databases/$(database)/documents/classrooms/$(classroomId)).data.teacherIds
+      );
+    }
+
+    function managesSession(sessionId) {
+      return managesClassroom(get(/databases/$(database)/documents/sessions/$(sessionId)).data.classroomId);
+    }
+
+    function isStudentSessionCheckIn() {
+      let session = get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data;
+      return ownsEmail(request.resource.data.studentEmail) &&
+        request.resource.data.type == 'scan' &&
+        request.resource.data.classroomId == session.classroomId &&
+        request.resource.data.tokenUsed == session.activeToken &&
+        session.isActive == true &&
+        request.resource.data.checkedAt == request.time;
+    }
     
     // Users collection
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
     }
     
     // Allowed Teachers (admin only)
     match /allowed_teachers/{email} {
-      allow read: if request.auth != null;
+      allow get: if isAdmin() || ownsEmail(email);
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
     
     // Pending Students (for pre-registration)
     match /pending_students/{email} {
-      allow read: if request.auth != null;
-      allow write: if isTeacher() || isAdmin();
+      allow read, write: if isTeacher();
     }
     
     // Classrooms collection - use teacherIds array
     match /classrooms/{classroomId} {
-      allow read: if request.auth != null;
+      // Student membership is still stored in the legacy roster collection; classrooms
+      // remain discoverable to signed-in users until that data is migrated.
+      allow read: if isSignedIn();
       allow create: if isTeacher();
-      allow update, delete: if request.auth != null && (
-        (resource.data.teacherIds != null && request.auth.uid in resource.data.teacherIds) || isAdmin()
-      );
+      allow update, delete: if managesClassroom(classroomId);
 
       // Posts sub-collection
       match /posts/{postId} {
-        allow read: if request.auth != null;
-        allow create, update, delete: if isTeacher();
+        allow read: if isSignedIn();
+        allow create, update, delete: if managesClassroom(classroomId);
       }
     }
     
     // Students collection
     match /students/{studentId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isTeacher();
+      allow read: if managesClassroom(resource.data.classroomId) || ownsEmail(resource.data.email);
+      allow create: if managesClassroom(request.resource.data.classroomId);
+      allow update: if managesClassroom(resource.data.classroomId) &&
+        request.resource.data.classroomId == resource.data.classroomId;
+      allow delete: if managesClassroom(resource.data.classroomId);
     }
     
     // Sessions collection
     match /sessions/{sessionId} {
-      allow read: if request.auth != null;
-      allow create, update: if isTeacher();
+      // Students need the active session to complete a QR check-in.  Do not put
+      // sensitive information other than short-lived check-in values in this document.
+      allow read: if isSignedIn();
+      allow create: if managesClassroom(request.resource.data.classroomId);
+      allow update: if managesClassroom(resource.data.classroomId) &&
+        request.resource.data.classroomId == resource.data.classroomId;
       allow delete: if isAdmin();
     }
     
     // Attendance collection
     match /attendance/{attendanceId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if managesSession(resource.data.sessionId) || ownsEmail(resource.data.studentEmail);
+      allow create: if managesSession(request.resource.data.sessionId) ||
+        (attendanceId == request.resource.data.sessionId + '_' + request.auth.token.email && isStudentSessionCheckIn());
+      allow update: if managesSession(resource.data.sessionId) &&
+        request.resource.data.sessionId == resource.data.sessionId &&
+        request.resource.data.classroomId == resource.data.classroomId;
       allow delete: if isAdmin();
     }
     
     // Grade Categories collection
     match /grades_categories/{categoryId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isTeacher();
+      allow read: if isSignedIn();
+      allow create: if managesClassroom(request.resource.data.classroomId);
+      allow update: if managesClassroom(resource.data.classroomId) &&
+        request.resource.data.classroomId == resource.data.classroomId;
+      allow delete: if managesClassroom(resource.data.classroomId);
     }
     
     // Grades collection
     match /grades/{gradeId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isTeacher();
+      allow read: if managesClassroom(resource.data.classroomId) || ownsEmail(resource.data.studentEmail);
+      allow create: if managesClassroom(request.resource.data.classroomId);
+      allow update: if managesClassroom(resource.data.classroomId) &&
+        request.resource.data.classroomId == resource.data.classroomId;
+      allow delete: if managesClassroom(resource.data.classroomId);
     }
     
     // Config collection (admin only for write)
     match /config/{configId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
     
     // Exit Tickets collection
     match /exit_tickets/{ticketId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if isAdmin();
+      allow read: if managesSession(resource.data.sessionId) || ownsEmail(resource.data.studentEmail);
+      allow create: if ticketId == request.resource.data.sessionId + '_' + request.auth.token.email &&
+        ownsEmail(request.resource.data.studentEmail) &&
+        request.resource.data.classroomId == get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.classroomId &&
+        get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.exitTicketEnabled == true &&
+        get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.exitTicketClosedManually == false &&
+        get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.exitTicketDeadline >= request.time;
+      allow update: if managesSession(resource.data.sessionId) &&
+        request.resource.data.sessionId == resource.data.sessionId &&
+        request.resource.data.classroomId == resource.data.classroomId;
+      allow delete: if managesSession(resource.data.sessionId);
     }
     
     // Group Sets collection (rounds of grouping)
     match /group_sets/{setId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isTeacher();
+      allow read: if managesClassroom(resource.data.classroomId);
+      allow create: if managesClassroom(request.resource.data.classroomId);
+      allow update: if managesClassroom(resource.data.classroomId) &&
+        request.resource.data.classroomId == resource.data.classroomId;
+      allow delete: if managesClassroom(resource.data.classroomId);
     }
     
     // Student Groups collection
     match /student_groups/{groupId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isTeacher();
+      allow read: if managesClassroom(resource.data.classroomId);
+      allow create: if managesClassroom(request.resource.data.classroomId);
+      allow update: if managesClassroom(resource.data.classroomId) &&
+        request.resource.data.classroomId == resource.data.classroomId;
+      allow delete: if managesClassroom(resource.data.classroomId);
     }
   }
 }

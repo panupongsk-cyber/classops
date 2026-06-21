@@ -8,9 +8,7 @@ import {
     getGroupSets,
     createGroupSet,
     deleteGroupSet,
-    getStudentGroups,
-    generateRandomGroups,
-    updateGroup
+    getStudentGroups
 } from '../../firebase/firestore';
 import { StudentModal, ConfirmModal } from '../Modal';
 import CSVImport from '../CSVImport';
