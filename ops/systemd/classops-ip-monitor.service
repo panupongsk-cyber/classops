@@ -1,0 +1,19 @@
+[Unit]
+Description=Monitor ClassOps public egress IP for Brevo SMTP allowlisting
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=classops
+Group=classops
+EnvironmentFile=-/etc/classops/ip-monitor.env
+ExecStart=/opt/classops/current/ops/public-ip-monitor.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/classops/network
+
+[Install]
+WantedBy=multi-user.target

@@ -8,7 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "emulators": "firebase emulators:start --project demo-attendance",
-    "start": "concurrently \"npm run emulators\" \"npm run dev\""
+    "start": "concurrently \"npm run emulators\" \"npm run dev\"",
+    "v2:db:up": "docker compose -f compose.v2.dev.yml up -d postgres",
+    "v2:db:down": "docker compose -f compose.v2.dev.yml down",
+    "v2:migrate": "npm --prefix server run db:migrate",
+    "v2:dev": "npm --prefix server run dev",
+    "v2:build": "npm --prefix server run build",
+    "v2:test": "npm --prefix server test"
   },
   "dependencies": {
     "firebase": "^12.12.0",
