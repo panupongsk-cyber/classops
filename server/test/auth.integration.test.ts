@@ -4,6 +4,7 @@ import test from "node:test";
 import { buildApp } from "../src/app.js";
 import type { AppConfig } from "../src/config.js";
 import { createDatabasePool } from "../src/db.js";
+import { claimMailBatch } from "../src/email/outbox.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -131,6 +132,18 @@ test(
         },
       });
       assert.equal(reloginResponse.statusCode, 200);
+
+      await pool.query("UPDATE email_outbox SET status = 'sent', payload_encrypted = ''");
+      const staleMail = await pool.query<{ id: string }>(
+        `INSERT INTO email_outbox
+           (recipient_email, template, payload_encrypted, status, attempts, locked_at)
+         VALUES ('stale@example.com', 'verify_email', 'sealed', 'sending', 1,
+                 now() - interval '16 minutes')
+         RETURNING id::text`,
+      );
+      const reclaimed = await claimMailBatch(pool, 1);
+      assert.equal(reclaimed[0]?.id, staleMail.rows[0]?.id);
+      assert.equal(reclaimed[0]?.attempts, 2);
     } finally {
       await app.close();
     }

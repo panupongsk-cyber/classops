@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 import type { FastifyInstance } from "fastify";
 import * as oidc from "openid-client";
 
@@ -5,7 +7,7 @@ import type { AppConfig } from "../config.js";
 import type { DatabasePool } from "../db.js";
 import { withTransaction } from "../db.js";
 import { decryptMailPayload, encryptMailPayload } from "../email/payload-crypto.js";
-import { hashToken, normalizeEmail } from "../security.js";
+import { generateOpaqueToken, hashToken, normalizeEmail } from "../security.js";
 import { issueSession } from "../session.js";
 
 const googleIssuer = new URL("https://accounts.google.com");
@@ -17,12 +19,31 @@ interface GoogleClaims {
   name?: string;
 }
 
+export function oauthBrowserBindingMatches(
+  browserBinding: string | undefined,
+  expectedBindingHash: unknown,
+) {
+  if (!browserBinding || typeof expectedBindingHash !== "string") return false;
+  const actualBindingHash = hashToken(browserBinding);
+  return (
+    actualBindingHash.length === expectedBindingHash.length &&
+    timingSafeEqual(Buffer.from(actualBindingHash), Buffer.from(expectedBindingHash))
+  );
+}
+
 export async function registerGoogleOAuthRoutes(
   app: FastifyInstance,
   dependencies: { pool: DatabasePool; config: AppConfig },
 ) {
   const { pool, config } = dependencies;
   const googleOAuth = config.googleOAuth;
+  const browserBindingCookieName = `${config.sessionCookieName}_oauth`;
+  const browserBindingCookieOptions = {
+    path: "/api/auth/google/callback",
+    httpOnly: true,
+    secure: config.nodeEnv === "production",
+    sameSite: "lax" as const,
+  };
 
   if (!googleOAuth) {
     app.get("/api/auth/google", async (_request, reply) =>
@@ -49,14 +70,27 @@ export async function registerGoogleOAuthRoutes(
       const nonce = oidc.randomNonce();
       const codeVerifier = oidc.randomPKCECodeVerifier();
       const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
+      const browserBinding = generateOpaqueToken();
+      await pool.query(
+        `DELETE FROM oauth_transactions
+         WHERE expires_at < now() - interval '1 day'
+            OR used_at < now() - interval '1 day'`,
+      );
       await pool.query(
         `INSERT INTO oauth_transactions (state_hash, sealed_context, expires_at)
          VALUES ($1, $2, now() + interval '10 minutes')`,
         [
           hashToken(state),
-          encryptMailPayload({ nonce, codeVerifier }, config.outboxEncryptionKey),
+          encryptMailPayload(
+            { nonce, codeVerifier, browserBindingHash: hashToken(browserBinding) },
+            config.outboxEncryptionKey,
+          ),
         ],
       );
+      reply.setCookie(browserBindingCookieName, browserBinding, {
+        ...browserBindingCookieOptions,
+        maxAge: 10 * 60,
+      });
 
       const authorizationUrl = oidc.buildAuthorizationUrl(client, {
         redirect_uri: googleOAuth.redirectUri,
@@ -95,9 +129,16 @@ export async function registerGoogleOAuthRoutes(
       return decryptMailPayload(row.sealed_context, config.outboxEncryptionKey) as {
         nonce: string;
         codeVerifier: string;
+        browserBindingHash: string;
       };
     });
     if (!transaction) return reply.redirect(`${config.appBaseUrl}/login?oauth=invalid_state`);
+
+    const browserBinding = request.cookies[browserBindingCookieName];
+    reply.clearCookie(browserBindingCookieName, browserBindingCookieOptions);
+    if (!oauthBrowserBindingMatches(browserBinding, transaction.browserBindingHash)) {
+      return reply.redirect(`${config.appBaseUrl}/login?oauth=invalid_state`);
+    }
 
     try {
       const client = await googleConfigPromise;

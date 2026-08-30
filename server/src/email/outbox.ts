@@ -35,7 +35,8 @@ export async function claimMailBatch(pool: DatabasePool, limit = 10) {
     `WITH claimable AS (
        SELECT id
        FROM email_outbox
-       WHERE status = 'pending' AND available_at <= now()
+       WHERE (status = 'pending' AND available_at <= now())
+          OR (status = 'sending' AND locked_at < now() - interval '15 minutes')
        ORDER BY id
        FOR UPDATE SKIP LOCKED
        LIMIT $1

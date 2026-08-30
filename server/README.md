@@ -9,11 +9,13 @@ This directory contains the PostgreSQL/Fastify authentication foundation for Cla
 - Opaque server-side sessions in secure HTTP-only cookies
 - PostgreSQL migration runner and audit log
 - Transactional email outbox with retry/backoff
+- Automatic recovery of outbox jobs left in `sending` after a worker crash
 - AES-256-GCM encryption for sensitive outbox payloads; raw verification/reset tokens are not stored in plaintext
 - Brevo SMTP worker and connection-only health check
 - Per-route rate limits and generic anti-enumeration responses
+- Production origin checks for state-changing requests
 
-Google OAuth uses the authorization-code flow with state, nonce, and PKCE. It deliberately omits Google's `hd` restriction, so any verified Google account can authenticate. A Google identity is keyed by the immutable `sub` claim, not email. If the verified Google email already belongs to a password account, automatic linking is refused until an authenticated account-linking flow is completed.
+Google OAuth uses the authorization-code flow with state, nonce, PKCE, and an HTTP-only browser-binding cookie to prevent login CSRF. It deliberately omits Google's `hd` restriction, so any verified Google account can authenticate. A Google identity is keyed by the immutable `sub` claim, not email. If the verified Google email already belongs to a password account, automatic linking is refused until an authenticated account-linking flow is completed.
 
 Classroom-data migration will be added on top of the same `users`, `auth_identities`, and `sessions` tables.
 
@@ -58,7 +60,9 @@ Create a Web application OAuth client in Google Cloud and add this local authori
 http://localhost:3000/api/auth/google/callback
 ```
 
-Then set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` together. For production, replace the redirect URI with the public HTTPS API callback. The implementation does not send an `hd` parameter and does not enforce an email suffix; access to classrooms will be controlled by ClassOps invitations and memberships instead.
+Then set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` together. For production, replace the redirect URI with the exact HTTPS callback served from the same origin as the frontend. The implementation does not send an `hd` parameter and does not enforce an email suffix; access to classrooms will be controlled by ClassOps invitations and memberships instead.
+
+Production deployments must set `APP_BASE_URL` and `TRUSTED_ORIGINS` to their exact HTTPS origin. State-changing API calls without a matching `Origin` header are rejected in production.
 
 ## Brevo secrets
 

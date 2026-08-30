@@ -21,7 +21,8 @@ const baseSchema = z.object({
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(10).max(240).default(30),
   OUTBOX_ENCRYPTION_KEY: z.string().min(1).refine((value) => {
     try {
-      return Buffer.from(value, "base64").length === 32;
+      const decoded = Buffer.from(value, "base64");
+      return decoded.length === 32 && decoded.toString("base64") === value;
     } catch {
       return false;
     }

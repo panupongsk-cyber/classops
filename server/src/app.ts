@@ -34,7 +34,7 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
     credentials: true,
     origin(origin, callback) {
       if (!origin || trustedOriginSet.has(origin)) return callback(null, true);
-      callback(new Error("Origin is not allowed"), false);
+      callback(Object.assign(new Error("Origin is not allowed"), { statusCode: 403 }), false);
     },
   });
   await app.register(rateLimit, {
@@ -46,7 +46,7 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   app.addHook("onRequest", async (request, reply) => {
     if (!unsafeMethods.has(request.method)) return;
     const origin = request.headers.origin;
-    if (origin && !trustedOriginSet.has(origin)) {
+    if ((!origin && config.nodeEnv === "production") || (origin && !trustedOriginSet.has(origin))) {
       await reply.code(403).send({ error: "UNTRUSTED_ORIGIN" });
     }
   });
@@ -60,9 +60,27 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   await registerGoogleOAuthRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {
-    request.log.error({ err: error }, "request failed");
     if (reply.sent) return;
-    void reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
+    const errorWithStatus = error as { statusCode?: unknown };
+    const statusCode =
+      typeof errorWithStatus.statusCode === "number" &&
+      errorWithStatus.statusCode >= 400 &&
+      errorWithStatus.statusCode < 500
+        ? errorWithStatus.statusCode
+        : 500;
+    if (statusCode >= 500) request.log.error({ err: error }, "request failed");
+    else request.log.warn({ err: error }, "request rejected");
+    const errorCode =
+      statusCode === 429
+        ? "RATE_LIMITED"
+        : statusCode === 403
+          ? "REQUEST_REJECTED"
+          : statusCode === 415
+            ? "UNSUPPORTED_MEDIA_TYPE"
+            : statusCode < 500
+              ? "INVALID_REQUEST"
+              : "INTERNAL_SERVER_ERROR";
+    void reply.code(statusCode).send({ error: errorCode });
   });
 
   app.addHook("onClose", async () => {
