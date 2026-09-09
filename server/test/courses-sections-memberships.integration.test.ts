@@ -78,6 +78,14 @@ test(
         email: "another@example.com",
         displayName: "Another Student",
       });
+      const plainTeacher = await createUserWithSession(pool, {
+        email: "plain-teacher@example.com",
+        displayName: "Plain Teacher",
+      });
+      const taTarget = await createUserWithSession(pool, {
+        email: "ta-target@example.com",
+        displayName: "TA Target",
+      });
 
       // is_platform_admin flows through the session to /api/auth/me.
       const meResponse = await app.inject({
@@ -158,14 +166,37 @@ test(
       );
       assert.equal(membershipCount.rows[0]?.count, 1);
 
-      // A teacher cannot grant the owner role.
-      const teacherGrantsOwner = await app.inject({
+      // `teacher.cookie` above belongs to the section's *owner* (granted at course creation), not
+      // someone holding the plain `teacher` role — owner legitimately can grant owner, so testing
+      // "a teacher cannot grant owner" against them would trivially pass 201, not exercise the
+      // rule at all. Grant a genuinely separate user only the `teacher` role, then test them.
+      const grantTeacherRoleResponse = await app.inject({
         method: "POST",
         url: `/api/sections/${sectionId}/memberships`,
         headers: { cookie: teacher.cookie, ...origin },
+        payload: { email: "plain-teacher@example.com", roles: ["teacher"] },
+      });
+      assert.equal(grantTeacherRoleResponse.statusCode, 201);
+      assert.deepEqual(grantTeacherRoleResponse.json().roles, ["teacher"]);
+
+      // A plain teacher (not owner) can manage student/ta...
+      const plainTeacherGrantsStudent = await app.inject({
+        method: "POST",
+        url: `/api/sections/${sectionId}/memberships`,
+        headers: { cookie: plainTeacher.cookie, ...origin },
+        payload: { email: "ta-target@example.com", roles: ["ta"] },
+      });
+      assert.equal(plainTeacherGrantsStudent.statusCode, 201);
+      assert.deepEqual(plainTeacherGrantsStudent.json().roles, ["ta"]);
+
+      // ...but cannot grant the owner role.
+      const plainTeacherGrantsOwner = await app.inject({
+        method: "POST",
+        url: `/api/sections/${sectionId}/memberships`,
+        headers: { cookie: plainTeacher.cookie, ...origin },
         payload: { email: "student@example.com", roles: ["owner"] },
       });
-      assert.equal(teacherGrantsOwner.statusCode, 403);
+      assert.equal(plainTeacherGrantsOwner.statusCode, 403);
 
       // A student cannot manage anyone's membership.
       const studentManages = await app.inject({

@@ -7,6 +7,13 @@ const booleanFromString = z
   .default("false")
   .transform((value) => value === "true");
 
+// Compose/shell environments commonly pass an unset variable through as an empty string rather
+// than omitting the key entirely (e.g. `${GOOGLE_CLIENT_ID}` in a Compose `environment:` block
+// with no value in the env file) — treat "" the same as "not provided" for optional fields.
+function optionalNonEmpty<T extends z.ZodType>(schema: T) {
+  return z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
+}
+
 const baseSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST: z.string().default("127.0.0.1"),
@@ -25,9 +32,9 @@ const baseSchema = z.object({
       return false;
     }
   }, "SEALED_PAYLOAD_ENCRYPTION_KEY must be a base64-encoded 32-byte key"),
-  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
-  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
-  GOOGLE_REDIRECT_URI: z.url().optional(),
+  GOOGLE_CLIENT_ID: optionalNonEmpty(z.string().min(1)),
+  GOOGLE_CLIENT_SECRET: optionalNonEmpty(z.string().min(1)),
+  GOOGLE_REDIRECT_URI: optionalNonEmpty(z.url()),
   ADMIN_GOOGLE_EMAIL: z.email(),
 });
 

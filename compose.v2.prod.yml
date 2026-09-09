@@ -16,7 +16,7 @@ services:
       POSTGRES_USER: classops
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - classops_v2_postgres:/var/lib/postgresql/data
+      - classops_v2_postgres_prod:/var/lib/postgresql/data
     networks:
       - classops_internal
     healthcheck:
@@ -134,4 +134,4 @@ networks:
     internal: false
 
 volumes:
-  classops_v2_postgres:
+  classops_v2_postgres_prod:
