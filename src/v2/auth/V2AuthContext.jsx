@@ -27,25 +27,6 @@ export function V2AuthProvider({ children }) {
     user,
     loading,
     refresh,
-    async login(email, password) {
-      const result = await apiRequest('/api/auth/login', {
-        method: 'POST', body: JSON.stringify({ email, password }),
-      })
-      setUser(result.user)
-      return result.user
-    },
-    register: (displayName, email, password) => apiRequest('/api/auth/register', {
-      method: 'POST', body: JSON.stringify({ displayName, email, password }),
-    }),
-    resendVerification: (email) => apiRequest('/api/auth/resend-verification', {
-      method: 'POST', body: JSON.stringify({ email }),
-    }),
-    forgotPassword: (email) => apiRequest('/api/auth/forgot-password', {
-      method: 'POST', body: JSON.stringify({ email }),
-    }),
-    resetPassword: (token, password) => apiRequest('/api/auth/reset-password', {
-      method: 'POST', body: JSON.stringify({ token, password }),
-    }),
     async logout() {
       await apiRequest('/api/auth/logout', { method: 'POST' })
       setUser(null)

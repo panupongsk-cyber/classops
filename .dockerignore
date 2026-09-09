@@ -1,0 +1,9 @@
+.git
+node_modules
+server
+dist
+*.log
+.env
+.env.local
+.firebase
+firestore-debug.log

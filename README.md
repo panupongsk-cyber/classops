@@ -32,7 +32,7 @@ ClassOps is a unified classroom management system designed to consolidate multip
 ## 🛠️ Tech Stack
 - **Current frontend:** React + Vite
 - **Legacy production backend:** Firebase Authentication + Firestore
-- **ClassOps v2 foundation:** Fastify + TypeScript + PostgreSQL 16 + Brevo SMTP
+- **ClassOps v2 foundation:** Fastify + TypeScript + PostgreSQL 16 + Google OAuth
 - **Migration strategy:** Run v2 alongside Firebase until data migration and pilot acceptance are complete
 
 ---
@@ -58,17 +58,17 @@ ClassOps is a unified classroom management system designed to consolidate multip
    npm run dev
    ```
 
-## ClassOps v2 authentication foundation
+## ClassOps v2 shared core
 
-The v2 server is under [`server/`](server/README.md). It provides self-hosted email registration, verification, password reset, sessions, an email outbox, and PostgreSQL migrations without changing the existing Firebase application. Start the local database with `npm run v2:db:up` and follow the server README.
+The v2 server is under [`server/`](server/README.md). It provides Google OAuth-only authentication (no password of any kind), sessions, a Course/Section/Membership shared primitive, and PostgreSQL migrations without changing the existing Firebase application. Start the local database with `npm run v2:db:up` and follow the server README.
 
-The v2 authentication UI is isolated behind a build-time flag. To run it locally after starting the API and mail worker:
+The v2 authentication UI is isolated behind a build-time flag. To run it locally after starting the API:
 
 ```bash
 VITE_AUTH_MODE=v2 npm run dev
 ```
 
-Vite proxies `/api` to `http://127.0.0.1:3000`, keeping the browser session same-origin during development. `VITE_API_BASE_URL` can point to a separate API origin when required. The v2 UI currently covers registration, email verification, login, Google OAuth, logout, forgot-password, and reset-password only. Classroom data and roles remain in Firebase until the migration increment is complete.
+Vite proxies `/api` to `http://127.0.0.1:3000`, keeping the browser session same-origin during development. `VITE_API_BASE_URL` can point to a separate API origin when required. The v2 UI currently covers Google sign-in, logout, and a minimal account page only — no module UI (attendance, quizzes, etc.) ships yet. Classroom data and roles remain in Firebase until the migration increment is complete.
 
 The existing Firebase deployment remains the production system until a separate cutover is explicitly approved.
 

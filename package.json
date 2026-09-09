@@ -14,7 +14,12 @@
     "v2:migrate": "npm --prefix server run db:migrate",
     "v2:dev": "npm --prefix server run dev",
     "v2:build": "npm --prefix server run build",
-    "v2:test": "npm --prefix server test"
+    "v2:test": "npm --prefix server test",
+    "v2:prod:deploy": "bash ops/deploy/deploy.sh",
+    "v2:prod:health": "bash ops/deploy/health.sh",
+    "v2:prod:backup": "bash ops/deploy/backup.sh",
+    "v2:prod:restore": "bash ops/deploy/restore.sh",
+    "v2:prod:down": "docker compose -f compose.v2.prod.yml --env-file \"$CLASSOPS_ENV_FILE\" down"
   },
   "dependencies": {
     "firebase": "^12.12.0",

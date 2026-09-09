@@ -6,8 +6,8 @@ import * as oidc from "openid-client";
 import type { AppConfig } from "../config.js";
 import type { DatabasePool } from "../db.js";
 import { withTransaction } from "../db.js";
-import { decryptMailPayload, encryptMailPayload } from "../email/payload-crypto.js";
 import { generateOpaqueToken, hashToken, normalizeEmail } from "../security.js";
+import { decryptPayload, encryptPayload } from "../sealed-payload.js";
 import { issueSession } from "../session.js";
 
 const googleIssuer = new URL("https://accounts.google.com");
@@ -81,9 +81,9 @@ export async function registerGoogleOAuthRoutes(
          VALUES ($1, $2, now() + interval '10 minutes')`,
         [
           hashToken(state),
-          encryptMailPayload(
+          encryptPayload(
             { nonce, codeVerifier, browserBindingHash: hashToken(browserBinding) },
-            config.outboxEncryptionKey,
+            config.sealedPayloadEncryptionKey,
           ),
         ],
       );
@@ -126,7 +126,7 @@ export async function registerGoogleOAuthRoutes(
       await databaseClient.query("UPDATE oauth_transactions SET used_at = now() WHERE id = $1", [
         row.id,
       ]);
-      return decryptMailPayload(row.sealed_context, config.outboxEncryptionKey) as {
+      return decryptPayload(row.sealed_context, config.sealedPayloadEncryptionKey) as {
         nonce: string;
         codeVerifier: string;
         browserBindingHash: string;
@@ -157,6 +157,7 @@ export async function registerGoogleOAuthRoutes(
 
       const email = normalizeEmail(claims.email);
       const displayName = claims.name?.trim().slice(0, 100) || email.split("@")[0] || "Google user";
+      const isAdmin = email === config.adminGoogleEmail;
       const result = await withTransaction(pool, async (databaseClient) => {
         const existingIdentity = await databaseClient.query<{ user_id: string }>(
           `SELECT user_id FROM auth_identities
@@ -169,10 +170,9 @@ export async function registerGoogleOAuthRoutes(
           await databaseClient.query(
             `UPDATE users
              SET email = $2, display_name = $3, email_verified_at = COALESCE(email_verified_at, now()),
-                 status = CASE WHEN status = 'pending_verification' THEN 'active' ELSE status END,
-                 updated_at = now()
+                 is_platform_admin = $4, updated_at = now()
              WHERE id = $1`,
-            [existingUserId, email, displayName],
+            [existingUserId, email, displayName, isAdmin],
           );
           return { userId: existingUserId, linkRequired: false };
         }
@@ -186,10 +186,10 @@ export async function registerGoogleOAuthRoutes(
         }
 
         const inserted = await databaseClient.query<{ id: string }>(
-          `INSERT INTO users (email, display_name, status, email_verified_at)
-           VALUES ($1, $2, 'active', now())
+          `INSERT INTO users (email, display_name, status, email_verified_at, is_platform_admin)
+           VALUES ($1, $2, 'active', now(), $3)
            RETURNING id`,
-          [email, displayName],
+          [email, displayName, isAdmin],
         );
         const userId = inserted.rows[0]?.id;
         if (!userId) throw new Error("Google user insert did not return an id");

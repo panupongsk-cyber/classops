@@ -1,0 +1,137 @@
+# Production deployment pack for the ClassOps v2 pilot (Tailscale-only; see
+# ps-work:projects/personal/engineering/ClassOps/pilot-plan-macmini.md and phase1-deployment-spec.md).
+#
+# Only the gateway publishes a host port, bound to loopback — Tailscale Serve fronts it.
+# API and PostgreSQL are reachable only on the private `classops_internal` network.
+#
+# Secrets come from an env file outside Git: pass it at deploy time, e.g.
+#   docker compose -f compose.v2.prod.yml --env-file ~/.life-os/secrets/classops.env up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: classops
+      POSTGRES_USER: classops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - classops_v2_postgres:/var/lib/postgresql/data
+    networks:
+      - classops_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U classops -d classops"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  migrate:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    command: ["node", "dist/scripts/migrate.js"]
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://classops:${POSTGRES_PASSWORD}@postgres:5432/classops
+      APP_BASE_URL: ${APP_BASE_URL}
+      TRUSTED_ORIGINS: ${APP_BASE_URL}
+      TRUST_PROXY: "false"
+      SEALED_PAYLOAD_ENCRYPTION_KEY: ${SEALED_PAYLOAD_ENCRYPTION_KEY}
+      ADMIN_GOOGLE_EMAIL: ${ADMIN_GOOGLE_EMAIL}
+    networks:
+      - classops_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DATABASE_URL: postgresql://classops:${POSTGRES_PASSWORD}@postgres:5432/classops
+      APP_BASE_URL: ${APP_BASE_URL}
+      TRUSTED_ORIGINS: ${APP_BASE_URL}
+      TRUST_PROXY: "false"
+      SEALED_PAYLOAD_ENCRYPTION_KEY: ${SEALED_PAYLOAD_ENCRYPTION_KEY}
+      ADMIN_GOOGLE_EMAIL: ${ADMIN_GOOGLE_EMAIL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+    networks:
+      - classops_internal
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  gateway:
+    build:
+      context: .
+      dockerfile: ops/gateway/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - classops_internal
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/gateway-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+networks:
+  classops_internal:
+    driver: bridge
+    internal: false
+
+volumes:
+  classops_v2_postgres:

@@ -7,7 +7,10 @@ import Fastify from "fastify";
 import type { AppConfig } from "./config.js";
 import type { DatabasePool } from "./db.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { registerCourseRoutes } from "./routes/courses.js";
 import { registerGoogleOAuthRoutes } from "./routes/google-oauth.js";
+import { registerMembershipRoutes } from "./routes/memberships.js";
+import { registerSectionRoutes } from "./routes/sections.js";
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -51,13 +54,21 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
     }
   });
 
-  app.get("/health", async () => {
-    await pool.query("SELECT 1");
-    return { status: "ok" };
+  app.get("/health", async (_request, reply) => {
+    try {
+      await pool.query("SELECT 1");
+    } catch (error) {
+      app.log.warn({ err: error }, "health check: database unreachable");
+      return reply.code(503).send({ status: "degraded", database: "unreachable" });
+    }
+    return reply.send({ status: "ok" });
   });
 
   await registerAuthRoutes(app, { pool, config });
   await registerGoogleOAuthRoutes(app, { pool, config });
+  await registerCourseRoutes(app, { pool, config });
+  await registerSectionRoutes(app, { pool, config });
+  await registerMembershipRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {
     if (reply.sent) return;
