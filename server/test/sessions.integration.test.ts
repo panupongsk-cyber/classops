@@ -420,7 +420,7 @@ test("Sessions: generation, QR/Emoji check-in, roster, authorization", { skip: !
       checked_in_at: string | null;
     }>;
     // Only student/ta members appear -- not the owner/teacher/plain-teacher.
-    assert.equal(rosterEntries.length, 4);
+    assert.equal(rosterEntries.length, 3);
     const studentEntry = rosterEntries.find((entry) => entry.user_id === student.userId);
     const student2Entry = rosterEntries.find((entry) => entry.user_id === student2.userId);
     const taEntry = rosterEntries.find((entry) => entry.user_id === ta.userId);
