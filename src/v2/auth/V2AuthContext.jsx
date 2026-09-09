@@ -34,6 +34,9 @@ export function V2AuthProvider({ children }) {
     startGoogleLogin() {
       window.location.assign(apiUrl('/api/auth/google'))
     },
+    startMicrosoftLogin() {
+      window.location.assign(apiUrl('/api/auth/microsoft'))
+    },
   }), [loading, refresh, user])
 
   return <V2AuthContext.Provider value={value}>{children}</V2AuthContext.Provider>

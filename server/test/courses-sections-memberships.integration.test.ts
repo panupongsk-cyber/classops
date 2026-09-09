@@ -31,6 +31,11 @@ async function createUserWithSession(
   return { userId, cookie: `classops_session=${token}` };
 }
 
+// This TRUNCATEs shared tables against TEST_DATABASE_URL, same as
+// oauth-flow.integration.test.ts — both rely on `npm test`'s --test-concurrency=1 (see
+// package.json) so their TRUNCATE/insert cycles never race against each other on the one real
+// database. Do not remove that flag without giving DB-backed test files another way to avoid
+// trampling each other's data.
 test(
   "Course/Section/Membership CRUD, authorization, and join-code enrollment",
   { skip: !databaseUrl },
@@ -56,6 +61,7 @@ test(
       sealedPayloadEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
       adminGoogleEmail: "admin@example.com",
       googleOAuth: null,
+      microsoftOAuth: null,
     };
     const app = await buildApp({ config, pool });
     const origin = { origin: "http://localhost:5173" };

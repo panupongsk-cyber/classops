@@ -32,7 +32,7 @@ ClassOps is a unified classroom management system designed to consolidate multip
 ## 🛠️ Tech Stack
 - **Current frontend:** React + Vite
 - **Legacy production backend:** Firebase Authentication + Firestore
-- **ClassOps v2 foundation:** Fastify + TypeScript + PostgreSQL 16 + Google OAuth
+- **ClassOps v2 foundation:** Fastify + TypeScript + PostgreSQL 16 + Google/Microsoft OAuth
 - **Migration strategy:** Run v2 alongside Firebase until data migration and pilot acceptance are complete
 
 ---
@@ -60,7 +60,7 @@ ClassOps is a unified classroom management system designed to consolidate multip
 
 ## ClassOps v2 shared core
 
-The v2 server is under [`server/`](server/README.md). It provides Google OAuth-only authentication (no password of any kind), sessions, a Course/Section/Membership shared primitive, and PostgreSQL migrations without changing the existing Firebase application. Start the local database with `npm run v2:db:up` and follow the server README.
+The v2 server is under [`server/`](server/README.md). It provides Google and Microsoft OAuth authentication (no password of any kind, ever), sessions, a Course/Section/Membership shared primitive, and PostgreSQL migrations without changing the existing Firebase application. Start the local database with `npm run v2:db:up` and follow the server README.
 
 The v2 authentication UI is isolated behind a build-time flag. To run it locally after starting the API:
 

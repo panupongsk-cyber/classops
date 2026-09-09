@@ -19,6 +19,7 @@ function testConfig(nodeEnv: AppConfig["nodeEnv"]): AppConfig {
     sealedPayloadEncryptionKey: Buffer.alloc(32, 9).toString("base64"),
     adminGoogleEmail: "admin@example.test",
     googleOAuth: null,
+    microsoftOAuth: null,
   };
 }
 

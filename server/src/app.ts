@@ -10,6 +10,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCourseRoutes } from "./routes/courses.js";
 import { registerGoogleOAuthRoutes } from "./routes/google-oauth.js";
 import { registerMembershipRoutes } from "./routes/memberships.js";
+import { registerMicrosoftOAuthRoutes } from "./routes/microsoft-oauth.js";
 import { registerSectionRoutes } from "./routes/sections.js";
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -66,6 +67,7 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
 
   await registerAuthRoutes(app, { pool, config });
   await registerGoogleOAuthRoutes(app, { pool, config });
+  await registerMicrosoftOAuthRoutes(app, { pool, config });
   await registerCourseRoutes(app, { pool, config });
   await registerSectionRoutes(app, { pool, config });
   await registerMembershipRoutes(app, { pool, config });

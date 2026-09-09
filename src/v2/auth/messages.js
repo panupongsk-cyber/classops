@@ -1,5 +1,6 @@
 const errorMessages = {
   GOOGLE_OAUTH_NOT_CONFIGURED: 'ยังไม่ได้ตั้งค่า Google OAuth',
+  MICROSOFT_OAUTH_NOT_CONFIGURED: 'ยังไม่ได้ตั้งค่า Microsoft OAuth',
   REQUEST_FAILED: 'ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่',
 }
 

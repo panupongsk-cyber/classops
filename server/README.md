@@ -6,7 +6,7 @@ deployment.
 
 ## Included in this increment
 
-- Google OAuth-only authentication (no password storage of any kind)
+- Google and Microsoft OAuth authentication (no password storage of any kind, ever)
 - Opaque server-side sessions in secure HTTP-only cookies
 - PostgreSQL migration runner and audit log
 - Course / Section / Membership shared primitive: `Course` (reusable catalog entry, `type` of
@@ -19,10 +19,13 @@ deployment.
 - Per-route rate limits, production origin checks for state-changing requests
 - `/health` reports `503` when the database is unreachable
 
-Google OAuth uses the authorization-code flow with state, nonce, PKCE, and an HTTP-only
-browser-binding cookie to prevent login CSRF. It deliberately omits Google's `hd` restriction, so
-any verified Google account can authenticate. A Google identity is keyed by the immutable `sub`
-claim, not email.
+Both providers use the same authorization-code flow with state, nonce, PKCE, and an HTTP-only
+browser-binding cookie to prevent login CSRF (`src/oauth-flow.ts` — one shared implementation, not
+duplicated per provider). Google deliberately omits the `hd` restriction; Microsoft uses the
+`common` endpoint; neither enforces a domain or tenant. A Google identity is keyed by the immutable
+`sub` claim; a Microsoft identity by `oid` (Microsoft's own documented stable identifier — see
+`phase1-5-product-spec.md`). **ClassOps never links accounts across providers**: if a sign-in's
+email already belongs to a different provider's user, it's rejected, not merged.
 
 No module UI (attendance, ITPE quiz-app, OmniQuizOps) ships from this directory yet — see
 `ps-work:projects/personal/engineering/ClassOps/phase1-product-spec.md` for what is and isn't in
@@ -78,6 +81,22 @@ suffix; access to classrooms is controlled by Course/Section membership instead.
 
 Production deployments must set `APP_BASE_URL` and `TRUSTED_ORIGINS` to their exact HTTPS origin.
 State-changing API calls without a matching `Origin` header are rejected in production.
+
+## Microsoft OAuth
+
+Create an Azure App Registration accepting accounts in any organizational directory **and**
+personal Microsoft accounts ("Accounts in any organizational directory and personal Microsoft
+accounts"), and add this local authorized redirect URI:
+
+```text
+http://localhost:3000/api/auth/microsoft/callback
+```
+
+Then set `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, and `MICROSOFT_REDIRECT_URI` together —
+same all-or-nothing rule as Google's three variables. Microsoft's ID token has no `email_verified`
+claim; ClassOps trusts the `email` claim as-is once it's present, rejecting sign-in if it's absent.
+This is a real, deliberately-accepted trade-off — see `phase1-5-product-spec.md`'s "Read this
+first" section for the reasoning.
 
 ## `SEALED_PAYLOAD_ENCRYPTION_KEY`
 

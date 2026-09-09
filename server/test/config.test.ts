@@ -56,3 +56,46 @@ test("partially configured Google OAuth env vars still throws", () => {
     withEnv({ GOOGLE_CLIENT_ID: "client-id" }, () => loadAppConfig()),
   );
 });
+
+test("empty-string Microsoft OAuth env vars are treated as not configured, not a validation error", () => {
+  const config = withEnv(
+    { MICROSOFT_CLIENT_ID: "", MICROSOFT_CLIENT_SECRET: "", MICROSOFT_REDIRECT_URI: "" },
+    () => loadAppConfig(),
+  );
+  assert.equal(config.microsoftOAuth, null);
+});
+
+test("fully configured Microsoft OAuth env vars populate microsoftOAuth", () => {
+  const config = withEnv(
+    {
+      MICROSOFT_CLIENT_ID: "ms-client-id",
+      MICROSOFT_CLIENT_SECRET: "ms-client-secret",
+      MICROSOFT_REDIRECT_URI: "https://classops.example.test/api/auth/microsoft/callback",
+    },
+    () => loadAppConfig(),
+  );
+  assert.deepEqual(config.microsoftOAuth, {
+    clientId: "ms-client-id",
+    clientSecret: "ms-client-secret",
+    redirectUri: "https://classops.example.test/api/auth/microsoft/callback",
+  });
+});
+
+test("partially configured Microsoft OAuth env vars still throws", () => {
+  assert.throws(() =>
+    withEnv({ MICROSOFT_CLIENT_ID: "ms-client-id" }, () => loadAppConfig()),
+  );
+});
+
+test("Google and Microsoft OAuth configuration are independent of each other", () => {
+  const config = withEnv(
+    {
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_REDIRECT_URI: "https://classops.example.test/api/auth/google/callback",
+    },
+    () => loadAppConfig(),
+  );
+  assert.notEqual(config.googleOAuth, null);
+  assert.equal(config.microsoftOAuth, null);
+});
