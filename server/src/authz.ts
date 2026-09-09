@@ -12,6 +12,13 @@ export interface AuthenticatedUser {
 /** Roles that may manage `student`/`ta` membership rows for a section (not the `owner` role itself). */
 const membershipManagerRoles: readonly MembershipRole[] = ["owner", "teacher"];
 
+/** Roles that may create/open/close Sessions and view the roster (Phase 2a). */
+const sessionManagerRoles: readonly MembershipRole[] = ["owner", "teacher", "ta"];
+
+export function canManageSessions(roles: MembershipRole[]) {
+  return hasAnyRole(roles, sessionManagerRoles);
+}
+
 export async function getSectionRoles(
   pool: DatabasePool,
   userId: string,
