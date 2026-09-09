@@ -31,6 +31,27 @@ No module UI (attendance, ITPE quiz-app, OmniQuizOps) ships from this directory 
 `ps-work:projects/personal/engineering/ClassOps/phase1-product-spec.md` for what is and isn't in
 this increment, and its later-phase specs for what builds on top of this shared core.
 
+### Phase 2a: Sessions, check-in, roster
+
+Added on top of the shared core (see `phase2a-product-spec.md`):
+
+- `Session` scheduling per `Course.type`: `semester` Sections use a recurring weekly-pattern
+  generator (`session_schedule_patterns` + `Section.term_start_date`/`term_end_date`, idempotent
+  re-runs); `short_course` Sections create Sessions manually, one at a time; `self_paced` Sections
+  never have Sessions and reject the attempt with a clear error.
+- QR check-in: a short code on the Session row rotates lazily (regenerated on read once expired,
+  no background job) roughly every 15-30s, defending against screenshot sharing rather than code
+  secrecy.
+- Emoji check-in: one emoji, chosen unpredictably from a fixed palette, fixed for the whole open
+  window (not rotated) — the anti-proxy property comes from not knowing it in advance.
+- Roster: checked-in status per `student`/`ta` Section member for a Session.
+- Authorization: `owner`/`teacher`/`ta` create/open/close Sessions and view the roster; any
+  Section member may check themselves in only, while the Session is open.
+- The domain table is named `class_sessions`, not `sessions` — migration 001 already used
+  `sessions` for login sessions, a collision the product spec's naming didn't anticipate.
+
+No new environment variable, container, or background worker (see `phase2a-deployment-spec.md`).
+
 ## Local development
 
 Start PostgreSQL from the repository root:
@@ -113,7 +134,8 @@ Unit tests do not require PostgreSQL:
 npm run v2:test
 ```
 
-The Course/Section/Membership integration test runs when `TEST_DATABASE_URL` is present:
+The Course/Section/Membership and Sessions integration tests run when `TEST_DATABASE_URL` is
+present:
 
 ```bash
 TEST_DATABASE_URL=postgresql://classops:classops_dev@127.0.0.1:5433/classops npm run v2:test
