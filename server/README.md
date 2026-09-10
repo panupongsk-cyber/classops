@@ -102,6 +102,32 @@ Session/check-in/Exit-Ticket tables (see `phase2b2-product-spec.md`):
 No new environment variable, container, or background worker (see
 `phase2b2-deployment-spec.md`).
 
+### Phase 2b-3: Class Feed
+
+Added on top of the Phase 1 Course/Section/Membership shared core, entirely independent of the
+attendance and gradebook tables (see `phase2b3-product-spec.md`):
+
+- **Post** (Section-scoped): text body + optional link URL — no file attachments, deliberately
+  deferred (the first feature that could plausibly have needed new storage infrastructure).
+  Created by `owner`/`teacher`/`ta` only; any `owner`/`teacher`/`ta` may edit or delete **any**
+  Post, not only the one they authored — consistent with Category/Assignment management.
+- **Comment**: any Section member, including students, may comment (genuine Q&A, not a
+  staff-only channel); a comment's own author or any `owner`/`teacher`/`ta` may delete it. No
+  editing — delete-and-repost only.
+- **Like**: a per-`(post, user)` toggle, idempotent, Posts only (not Comments).
+- The feed lists Posts newest-first with like count, whether the caller has liked it, and a
+  comment count; Comments are fetched per-Post on demand, not embedded in the feed listing.
+- No real-time push (WebSocket/SSE) — a plain polled/refreshed `GET` endpoint like every other
+  list in ClassOps.
+- An adversarial multi-lens review (authorization, SQL/idempotency, QA-spec conformance) run
+  before infra verification caught one real bug: `PATCH /api/posts/:postId` used `COALESCE` for
+  partial updates, which can't tell "linkUrl omitted" from "linkUrl explicitly cleared" — a Post's
+  link could never be removed once set. Fixed by making `linkUrl` nullable and building the `SET`
+  clause from which keys the client actually sent.
+
+No new environment variable, container, or background worker (see
+`phase2b3-deployment-spec.md`).
+
 ## Local development
 
 Start PostgreSQL from the repository root:
@@ -184,7 +210,8 @@ Unit tests do not require PostgreSQL:
 npm run v2:test
 ```
 
-The Course/Section/Membership, Sessions, Exit Tickets/Random Picker, and Gradebook integration
+The Course/Section/Membership, Sessions, Exit Tickets/Random Picker, Gradebook, and Class Feed
+integration
 tests run when
 `TEST_DATABASE_URL` is present:
 
