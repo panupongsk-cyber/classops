@@ -75,6 +75,33 @@ Added on top of Phase 2a's Session model (see `phase2b1-product-spec.md`):
 No new environment variable, container, or background worker (see
 `phase2b1-deployment-spec.md`).
 
+### Phase 2b-2: Gradebook, CSV export
+
+Added on top of the Phase 1 Course/Section/Membership shared core, entirely independent of the
+Session/check-in/Exit-Ticket tables (see `phase2b2-product-spec.md`):
+
+- **Category** (Section-scoped) → **Assignment** (belongs to a Category, has `maxPoints`) →
+  **Score** (per assignment/student, `pointsEarned`, extra credit allowed — not clamped at
+  `maxPoints`). Only `owner`/`teacher`/`ta` ever write a Score, so re-entering one is a plain
+  upsert — no resubmission-identity concern the way check-in/Exit-Ticket had.
+- **Final grade** is computed fresh on every read by `src/gradebook.ts`, a pure function of
+  (categories, assignments, scores) with no database or side effects — unit-tested directly
+  (`test/gradebook.test.ts`), separately from the usual database-backed integration tests. Within
+  a Category, scores combine points-weighted (`sum earned / sum max`), not averaged per-assignment.
+  Across Categories, only those with at least one graded Assignment for a given student count
+  ("active"); their weights renormalize proportionally among themselves (dividing by the sum of
+  active weights rather than 100), so Category weights need not sum to 100 across a Section. A
+  student with no graded work anywhere has `finalGrade: null`, never a misleading 0%.
+- Single-score and bulk-per-assignment upsert endpoints; bulk is all-or-nothing in one
+  transaction.
+- A JSON gradebook view and a full-matrix CSV export (every Assignment's raw score, every
+  Category's percentage, the final grade) both call the same computation function, so their
+  numbers can never drift apart.
+- Teacher-facing only (`owner`/`teacher`/`ta`) — no student-facing grade view in this phase.
+
+No new environment variable, container, or background worker (see
+`phase2b2-deployment-spec.md`).
+
 ## Local development
 
 Start PostgreSQL from the repository root:
@@ -157,7 +184,8 @@ Unit tests do not require PostgreSQL:
 npm run v2:test
 ```
 
-The Course/Section/Membership, Sessions, and Exit Tickets/Random Picker integration tests run when
+The Course/Section/Membership, Sessions, Exit Tickets/Random Picker, and Gradebook integration
+tests run when
 `TEST_DATABASE_URL` is present:
 
 ```bash
