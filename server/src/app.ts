@@ -17,6 +17,7 @@ import { registerMicrosoftOAuthRoutes } from "./routes/microsoft-oauth.js";
 import { registerRandomPickerRoutes } from "./routes/random-picker.js";
 import { registerSectionRoutes } from "./routes/sections.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerStatsRoutes } from "./routes/stats.js";
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -81,6 +82,7 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   await registerRandomPickerRoutes(app, { pool, config });
   await registerGradebookRoutes(app, { pool, config });
   await registerFeedRoutes(app, { pool, config });
+  await registerStatsRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {
     if (reply.sent) return;

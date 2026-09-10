@@ -82,7 +82,9 @@ async function getAssignment(pool: DatabasePool, assignmentId: string) {
 // Fetches everything computeGrades() needs for one Section in three queries, and the
 // student/ta roster to compute for -- shared by both the JSON gradebook view and the CSV export
 // so their numbers can never drift apart.
-async function loadGradebookInputs(pool: DatabasePool, sectionId: string) {
+// Exported for reuse by Phase 2b-4's Stats Dashboard (src/routes/stats.ts), so its grade
+// computation is never a second, potentially-drifting copy of this one.
+export async function loadGradebookInputs(pool: DatabasePool, sectionId: string) {
   const categoriesResult = await pool.query<CategoryRow>(
     "SELECT id, section_id, name, weight FROM categories WHERE section_id = $1 ORDER BY created_at",
     [sectionId],
