@@ -10,6 +10,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCourseRoutes } from "./routes/courses.js";
 import { registerExitTicketRoutes } from "./routes/exit-tickets.js";
 import { registerGoogleOAuthRoutes } from "./routes/google-oauth.js";
+import { registerGradebookRoutes } from "./routes/gradebook.js";
 import { registerMembershipRoutes } from "./routes/memberships.js";
 import { registerMicrosoftOAuthRoutes } from "./routes/microsoft-oauth.js";
 import { registerRandomPickerRoutes } from "./routes/random-picker.js";
@@ -77,6 +78,7 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   await registerSessionRoutes(app, { pool, config });
   await registerExitTicketRoutes(app, { pool, config });
   await registerRandomPickerRoutes(app, { pool, config });
+  await registerGradebookRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {
     if (reply.sent) return;
