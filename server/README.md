@@ -52,6 +52,29 @@ Added on top of the shared core (see `phase2a-product-spec.md`):
 
 No new environment variable, container, or background worker (see `phase2a-deployment-spec.md`).
 
+### Phase 2b-1: Exit Tickets, Random Picker
+
+Added on top of Phase 2a's Session model (see `phase2b1-product-spec.md`):
+
+- **Exit Ticket**: belongs to a Session, open/close is a separate switch from the Session's own
+  check-in state. Multiple Exit Tickets allowed per Session over time, only one open at once
+  (enforced with a partial unique index, not just an application check). Every response combines
+  a 1-5 rating with an optional free-text comment; resubmitting **updates** the existing response
+  (`ON CONFLICT ... DO UPDATE`) rather than being idempotent-no-op like check-in — a deliberate
+  deviation, since feedback plausibly changes before the window closes while a check-in fact
+  shouldn't.
+- **Random Picker**: picks one student uniformly at random among those currently checked in to
+  the open Session *and* at the current minimum pick count for that Session. This single query
+  is the entire fairness mechanism — no explicit "reset the rotation" action or state exists.
+  Round 1 spreads picks across everyone at 0; once everyone's been picked once the minimum
+  becomes 1 and a new round starts on its own, and a student who checks in mid-Session starts at
+  0 picks (same as everyone did at the round's start), so they're immediately eligible.
+- Both features reuse `canManageSessions` (`owner`/`teacher`/`ta`) for management; any Section
+  member may submit/revise their own Exit Ticket response.
+
+No new environment variable, container, or background worker (see
+`phase2b1-deployment-spec.md`).
+
 ## Local development
 
 Start PostgreSQL from the repository root:
@@ -134,8 +157,8 @@ Unit tests do not require PostgreSQL:
 npm run v2:test
 ```
 
-The Course/Section/Membership and Sessions integration tests run when `TEST_DATABASE_URL` is
-present:
+The Course/Section/Membership, Sessions, and Exit Tickets/Random Picker integration tests run when
+`TEST_DATABASE_URL` is present:
 
 ```bash
 TEST_DATABASE_URL=postgresql://classops:classops_dev@127.0.0.1:5433/classops npm run v2:test
