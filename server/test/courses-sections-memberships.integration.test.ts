@@ -189,6 +189,41 @@ test(
         .sections.find((section: { id: string }) => section.id === sectionId);
       assert.equal(adminSection.join_code, joinCode);
 
+      // Per-Section isolation within the same Course: a caller who is a member of one Section
+      // must not see a sibling Section's join_code just because they belong to the same Course.
+      // A single-Section fixture can't distinguish correct per-Section correlation from a broken
+      // implementation that accidentally scoped membership at the Course level instead -- add a
+      // second Section under the same Course, owned by a different user, and confirm the first
+      // Section's owner sees null for it.
+      const secondSectionResponse = await app.inject({
+        method: "POST",
+        url: `/api/courses/${courseId}/sections`,
+        headers: { cookie: admin.cookie, ...origin },
+        payload: { term: "2569/1", label: "802", ownerUserId: another.userId },
+      });
+      assert.equal(secondSectionResponse.statusCode, 201);
+      const secondSectionId = secondSectionResponse.json().sectionId as string;
+
+      const courseDetailAfterSecondSection = await app.inject({
+        method: "GET",
+        url: `/api/courses/${courseId}`,
+        headers: { cookie: teacher.cookie },
+      });
+      assert.equal(courseDetailAfterSecondSection.statusCode, 200);
+      const sections = courseDetailAfterSecondSection.json().sections as Array<{
+        id: string;
+        join_code: string | null;
+      }>;
+      const ownSectionAfter = sections.find((section) => section.id === sectionId);
+      const siblingSection = sections.find((section) => section.id === secondSectionId);
+      assert.ok(ownSectionAfter && siblingSection, "both Sections are listed");
+      assert.equal(ownSectionAfter?.join_code, joinCode, "still sees their own Section's join_code");
+      assert.equal(
+        siblingSection?.join_code,
+        null,
+        "does not see the sibling Section's join_code just for sharing a Course",
+      );
+
       // Teacher (owner of this section) grants the student role to `student` by email.
       const grantResponse = await app.inject({
         method: "POST",
