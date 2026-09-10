@@ -128,6 +128,34 @@ attendance and gradebook tables (see `phase2b3-product-spec.md`):
 No new environment variable, container, or background worker (see
 `phase2b3-deployment-spec.md`).
 
+### Phase 2b-4: Stats Dashboard
+
+Added on top of Phase 2a's Session/check-in, Phase 2b-2's Category/Assignment/Score, and Phase
+2b-3's Post/Comment/Like data (see `phase2b4-product-spec.md`). **No new migration** — the first
+ClassOps v2 phase with zero new database schema, pure read-only aggregation over what already
+exists.
+
+- **Class-wide view** (`GET /api/sections/:sectionId/stats`, `owner`/`teacher`/`ta` only): a
+  Section-wide summary (average/min/max final grade, average attendance rate, total
+  posts/comments/likes) plus a per-student breakdown, in one response — mirrors how Gradebook's
+  own view already combines a summary with a per-student list.
+- **Personal view** (`GET /api/sections/:sectionId/stats/students/:userId`): the caller's own
+  always allowed; any `owner`/`teacher`/`ta` may view any Section member's — attendance rate +
+  final grade only, no feed-engagement numbers.
+- **Attendance rate** = checked-in Sessions ÷ Sessions with `opened_at IS NOT NULL`, computed
+  once per Section (never per student), so the `null` case (no opened Sessions yet) is
+  Section-wide — never a source of inconsistency between two students in the same Section.
+- **Grade summary reuses Gradebook's `loadGradebookInputs`/`computeGrades` directly** (exported
+  `loadGradebookInputs` from `routes/gradebook.ts` for this) — no duplicated grading logic, and
+  the class-wide view's per-student `finalGrade` values are structurally guaranteed to match
+  Gradebook's own endpoint for the same fixture, not just tested to match.
+- An adversarial multi-lens review (authorization, computation correctness, QA-spec conformance)
+  run before infra verification found nothing to flag — confirmed as a genuine clean result, not
+  a silent failure, by checking each reviewer's actual journaled output.
+
+No new environment variable, container, background worker, or database table (see
+`phase2b4-deployment-spec.md`).
+
 ## Local development
 
 Start PostgreSQL from the repository root:
@@ -210,8 +238,8 @@ Unit tests do not require PostgreSQL:
 npm run v2:test
 ```
 
-The Course/Section/Membership, Sessions, Exit Tickets/Random Picker, Gradebook, and Class Feed
-integration
+The Course/Section/Membership, Sessions, Exit Tickets/Random Picker, Gradebook, Class Feed, and
+Stats Dashboard integration
 tests run when
 `TEST_DATABASE_URL` is present:
 
