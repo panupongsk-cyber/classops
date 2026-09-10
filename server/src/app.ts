@@ -9,6 +9,7 @@ import type { DatabasePool } from "./db.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCourseRoutes } from "./routes/courses.js";
 import { registerExitTicketRoutes } from "./routes/exit-tickets.js";
+import { registerFeedRoutes } from "./routes/feed.js";
 import { registerGoogleOAuthRoutes } from "./routes/google-oauth.js";
 import { registerGradebookRoutes } from "./routes/gradebook.js";
 import { registerMembershipRoutes } from "./routes/memberships.js";
@@ -79,6 +80,7 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   await registerExitTicketRoutes(app, { pool, config });
   await registerRandomPickerRoutes(app, { pool, config });
   await registerGradebookRoutes(app, { pool, config });
+  await registerFeedRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {
     if (reply.sent) return;
