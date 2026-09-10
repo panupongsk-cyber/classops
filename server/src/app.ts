@@ -8,9 +8,11 @@ import type { AppConfig } from "./config.js";
 import type { DatabasePool } from "./db.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCourseRoutes } from "./routes/courses.js";
+import { registerExitTicketRoutes } from "./routes/exit-tickets.js";
 import { registerGoogleOAuthRoutes } from "./routes/google-oauth.js";
 import { registerMembershipRoutes } from "./routes/memberships.js";
 import { registerMicrosoftOAuthRoutes } from "./routes/microsoft-oauth.js";
+import { registerRandomPickerRoutes } from "./routes/random-picker.js";
 import { registerSectionRoutes } from "./routes/sections.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 
@@ -73,6 +75,8 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   await registerSectionRoutes(app, { pool, config });
   await registerMembershipRoutes(app, { pool, config });
   await registerSessionRoutes(app, { pool, config });
+  await registerExitTicketRoutes(app, { pool, config });
+  await registerRandomPickerRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {
     if (reply.sent) return;
