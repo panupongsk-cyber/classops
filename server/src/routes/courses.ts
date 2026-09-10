@@ -49,6 +49,12 @@ export async function registerCourseRoutes(
     return reply.send({ courses: result.rows });
   });
 
+  // Section metadata (id/term/label) is visible to any authenticated user, same as the plain
+  // Course list above -- it's catalog information, not a secret. `join_code` is the actual secret
+  // (it grants self-enrollment via POST /api/sections/join), so it's only ever included for a
+  // Section the caller is already a member of, or for a platform admin -- the same "caller must
+  // hold a role on this Section" rule GET /api/sections/:sectionId already enforces for a single
+  // Section, applied per-row here since this endpoint lists many.
   app.get("/api/courses/:courseId", async (request, reply) => {
     const user = await requireCurrentUser(request, reply, pool, config);
     if (!user) return;
@@ -59,8 +65,14 @@ export async function registerCourseRoutes(
     );
     if (!course.rowCount) return reply.code(404).send({ error: "COURSE_NOT_FOUND" });
     const sections = await pool.query(
-      "SELECT id, term, label, join_code FROM sections WHERE course_id = $1 ORDER BY term, label",
-      [courseId],
+      `SELECT section.id, section.term, section.label,
+              CASE WHEN $2 OR membership.user_id IS NOT NULL THEN section.join_code END AS join_code
+       FROM sections AS section
+       LEFT JOIN memberships AS membership
+         ON membership.section_id = section.id AND membership.user_id = $3
+       WHERE section.course_id = $1
+       ORDER BY section.term, section.label`,
+      [courseId, user.isPlatformAdmin, user.id],
     );
     return reply.send({ course: course.rows[0], sections: sections.rows });
   });

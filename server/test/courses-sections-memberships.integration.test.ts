@@ -147,6 +147,48 @@ test(
       });
       assert.equal(forbiddenRead.statusCode, 403);
 
+      // GET /api/courses/:courseId never leaks a Section's join_code to a non-member -- the
+      // Section itself is still listed (id/term/label, catalog-level info), but join_code is
+      // null unless the caller is a member or a platform admin. This is the fix for the
+      // authorization gap found during PS-TASK-20260910-657's adversarial spec review: any
+      // authenticated user could previously read a real join_code here and self-enroll via
+      // POST /api/sections/join, bypassing every Section's actual membership boundary.
+      const courseDetailAsNonMember = await app.inject({
+        method: "GET",
+        url: `/api/courses/${courseId}`,
+        headers: { cookie: student.cookie },
+      });
+      assert.equal(courseDetailAsNonMember.statusCode, 200);
+      const nonMemberSection = courseDetailAsNonMember
+        .json()
+        .sections.find((section: { id: string }) => section.id === sectionId);
+      assert.ok(nonMemberSection, "the Section itself is still listed for a non-member");
+      assert.equal(nonMemberSection.join_code, null);
+
+      // The Section's owner (a member) sees the real join_code through the same endpoint.
+      const courseDetailAsMember = await app.inject({
+        method: "GET",
+        url: `/api/courses/${courseId}`,
+        headers: { cookie: teacher.cookie },
+      });
+      assert.equal(courseDetailAsMember.statusCode, 200);
+      const memberSection = courseDetailAsMember
+        .json()
+        .sections.find((section: { id: string }) => section.id === sectionId);
+      assert.equal(memberSection.join_code, joinCode);
+
+      // A platform admin sees the real join_code too, without being a Section member.
+      const courseDetailAsAdmin = await app.inject({
+        method: "GET",
+        url: `/api/courses/${courseId}`,
+        headers: { cookie: admin.cookie },
+      });
+      assert.equal(courseDetailAsAdmin.statusCode, 200);
+      const adminSection = courseDetailAsAdmin
+        .json()
+        .sections.find((section: { id: string }) => section.id === sectionId);
+      assert.equal(adminSection.join_code, joinCode);
+
       // Teacher (owner of this section) grants the student role to `student` by email.
       const grantResponse = await app.inject({
         method: "POST",
