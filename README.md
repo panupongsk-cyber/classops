@@ -1,83 +1,88 @@
-# ClassOps - All-in-One Classroom Operating System
+# ClassOps
 
-## Version 1.1.0 (April 2026)
+## Live ClassOps v2 pilot
 
-ClassOps is a unified classroom management system designed to consolidate multiple platforms (LMS, Teams, Quizzes, Programming) into a single, interactive hub.
+As of 2026-09-11, ClassOps v2 is a live, self-hosted pilot at
+[classops.pshomelab.dev](https://classops.pshomelab.dev/).
 
-🌐 **Live:** [Your Deployment URL]
+- **Live authentication:** Google OAuth only. ClassOps does not store passwords. The source (and
+  login shell) includes an optional Microsoft OAuth implementation, but it is intentionally not
+  configured or usable in the live pilot; its activation is deferred in PersonalSchema
+  work-tracker issue **#712**.
+- **Live browser UI:** authentication only — Google sign-in, logout, and a minimal account page.
+  There is currently no browser UI for course or section setup, membership, attendance,
+  check-in, exit tickets, random picker, gradebook, class feed, or statistics.
+- **API versus feature availability:** the Fastify/PostgreSQL server contains and tests APIs for
+  the classroom modules listed below. Those APIs are implementation foundations, **not** a claim
+  that the corresponding feature is usable in a browser yet.
+- **Legacy distinction:** the Firebase client remains in the repository as the historical
+  `LegacyRoot` code path and can still be built for reference. The live hostname serves the v2
+  pilot, not the legacy Firebase application, and no Firebase data has been migrated into v2.
 
----
+The pilot's remaining operational and product follow-ups are deliberately tracked separately:
 
-## ✨ Features
+- **#712 — Microsoft OAuth:** deferred until an Azure application and a user need it.
+- **#721 — proxy-aware rate limiting:** `TRUST_PROXY=false` is an accepted pilot limitation, so
+  traffic behind the public proxy can share a rate-limit bucket. Do not enable proxy trust without
+  first verifying the exact forwarding chain.
+- **#732 — remaining QA and hardening:** production backup/restore evidence, reboot recovery,
+  public-IP alerting, broader security checks, documentation review, and the eventual full
+  feature walkthrough are deferred. A full feature walkthrough cannot be completed until the
+  applicable v2 browser UI exists.
 
-### 📰 Class Feed (New!)
-- **Unified Timeline:** Replaces Teams/Moodle for announcements, resources, and assignments.
-- **Rich Post Types:** Supports text announcements, file attachments (PDFs/Images), and interactive links.
-- **Real-time Interaction:** Instant updates for students when a teacher posts new content.
-- **Engagement:** Built-in "Likes" and "Comments" for contextual Q&A.
+## v2 server capabilities (API only)
 
-### 🎓 LMS & Attendance
-- **Dynamic Roster:** Student management with easy enrollment.
-- **Attendance System:** QR Code + Emoji Challenge + GPS-verified check-ins.
-- **Exit Tickets:** Real-time feedback loop after every class session.
-- **Random Picker:** Interactive student selection for classroom engagement.
+The v2 server lives in [`server/`](server/README.md). Its APIs and integration tests currently
+cover the following modules:
 
-### 📊 Grading & Analytics
-- **Assignment Workflow:** Manage submissions and provide feedback directly in the app.
-- **Gradebook:** Comprehensive view of student performance with CSV export.
-- **Stats Dashboard:** Visual analytics for attendance and engagement.
+| Module | Backend/API status | Browser-feature status |
+| --- | --- | --- |
+| Authentication and sessions | Google OAuth live; optional Microsoft implementation deferred | Sign-in, logout, and account page only |
+| Course, Section, Membership | Implemented | No UI |
+| Sessions, QR/Emoji check-in, roster | Implemented | No UI |
+| Exit Tickets and Random Picker | Implemented | No UI |
+| Gradebook and CSV export | Implemented | No UI |
+| Class Feed | Implemented | No UI |
+| Stats aggregation | Implemented | No UI |
 
----
+## Local development
 
-## 🛠️ Tech Stack
-- **Current frontend:** React + Vite
-- **Legacy production backend:** Firebase Authentication + Firestore
-- **ClassOps v2 foundation:** Fastify + TypeScript + PostgreSQL 16 + Google/Microsoft OAuth
-- **Migration strategy:** Run v2 alongside Firebase until data migration and pilot acceptance are complete
-
----
-
-## 🚀 Getting Started
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/panupongsk-cyber/classops.git
-   cd classops
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Configure Firebase:**
-   Create a `.env` file based on `.env.example` and add your Firebase project credentials.
-
-4. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
-
-## ClassOps v2 shared core
-
-The v2 server is under [`server/`](server/README.md). It provides Google and Microsoft OAuth authentication (no password of any kind, ever), sessions, a Course/Section/Membership shared primitive, and PostgreSQL migrations without changing the existing Firebase application. Start the local database with `npm run v2:db:up` and follow the server README.
-
-The v2 authentication UI is isolated behind a build-time flag. To run it locally after starting the API:
+Install the repository dependencies:
 
 ```bash
+npm install
+```
+
+For v2 development, start the local database, configure the server variables described in the
+[server README](server/README.md), then start the v2 browser shell:
+
+```bash
+npm run v2:db:up
 VITE_AUTH_MODE=v2 npm run dev
 ```
 
-Vite proxies `/api` to `http://127.0.0.1:3000`, keeping the browser session same-origin during development. `VITE_API_BASE_URL` can point to a separate API origin when required. The v2 UI currently covers Google sign-in, logout, and a minimal account page only — no module UI (attendance, quizzes, etc.) ships yet. Classroom data and roles remain in Firebase until the migration increment is complete.
+Vite proxies `/api` to `http://127.0.0.1:3000`, keeping the browser session same-origin during
+development. `VITE_API_BASE_URL` can point to a separate API origin when required.
 
-The existing Firebase deployment remains the production system until a separate cutover is explicitly approved.
+The legacy Firebase client is a separate historical code path. To inspect it locally, configure
+its Firebase environment variables from `.env.example` and run `npm run dev` without
+`VITE_AUTH_MODE=v2`. That build does not describe the live v2 pilot.
 
----
+## Historical v1 feature history
 
-## 📝 Changelog
+The following records the Firebase-era v1 product history. It is retained for provenance and is
+not a statement of functionality available in the current v2 pilot.
 
 ### v1.1.0 (2026-04-15)
-- **Feature:** Introduced **Class Feed** for unified classroom communication.
-- **Branding:** Rebranded from "Attendance" to **ClassOps**.
-- **Security:** Moved Firebase configuration to environment variables.
-- **UI:** Added navigation tabs for "Feed" and "Attendance" for both Teachers and Students.
+
+- **Class Feed:** a unified timeline intended to replace Teams/Moodle for announcements,
+  resources, and assignments; text announcements, PDF/image attachments, interactive links,
+  real-time updates, likes, and comments for contextual Q&A.
+- **Attendance:** dynamic roster management plus QR Code, emoji challenge, and GPS-verified
+  check-ins.
+- **Classroom activities:** exit tickets for real-time feedback and an interactive random picker.
+- **Grading and analytics:** assignment workflow with feedback, a gradebook with CSV export, and
+  a statistics dashboard for attendance and engagement.
+- **Branding and UI:** rebranded from “Attendance” to “ClassOps” and added Feed/Attendance tabs
+  for teachers and students.
+- **Security:** Firebase configuration moved to environment variables.

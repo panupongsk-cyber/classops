@@ -18,14 +18,19 @@
 <p>ClassOps is a classroom management tool operated by the instructor, Panupong, for use in courses
 he teaches. This policy explains what information ClassOps collects and how it is used.</p>
 
+<p><strong>Current pilot scope:</strong> the live v2 pilot currently supports Google sign-in and a
+minimal account screen only. Microsoft sign-in is not configured, and the browser does not yet
+offer classroom feature screens. Server-side classroom APIs exist for later development, but are
+not current browser features.</p>
+
 <h2>Information we collect</h2>
 <ul>
-  <li><strong>Sign-in information:</strong> when you sign in with Google or Microsoft, ClassOps
+  <li><strong>Sign-in information:</strong> when you sign in with Google, ClassOps
     receives your name and email address from that provider. ClassOps does not receive or store
     your password.</li>
-  <li><strong>Course activity:</strong> attendance records, exit-ticket responses, assignment
-    submissions and grades, class feed posts and comments, and section join-code usage tied to
-    your account.</li>
+  <li><strong>Course activity:</strong> if and when classroom functions are made available and
+    used, this may include attendance records, exit-ticket responses, assignment submissions and
+    grades, class feed posts and comments, and section join-code usage tied to your account.</li>
 </ul>
 
 <h2>How this information is used</h2>
@@ -35,9 +40,8 @@ not sold, shared with advertisers, or used for any purpose outside running the c
 
 <h2>Where data is stored</h2>
 <p>Data is stored in a PostgreSQL database on infrastructure operated directly by the instructor.
-It is not shared with third parties except the sign-in providers (Google, Microsoft) needed for
-authentication and the network infrastructure (Cloudflare) used to serve the site securely over
-HTTPS.</p>
+It is not shared with third parties except Google, the sign-in provider used by the current pilot,
+and the network infrastructure (Cloudflare) used to serve the site securely over HTTPS.</p>
 
 <h2>Data retention</h2>
 <p>Course data is retained for the duration of the course and for a reasonable period afterward
@@ -46,8 +50,8 @@ data at any time by contacting the instructor at the address below.</p>
 
 <h2>Security</h2>
 <p>ClassOps uses HTTPS for all traffic and does not store passwords (sign-in is handled entirely
-by Google/Microsoft). As a small, single-operator project, it does not carry a formal security
-certification; if you have a security concern, please report it to the contact below.</p>
+by Google). As a small, single-operator project, it does not carry a formal security certification;
+if you have a security concern, please report it to the contact below.</p>
 
 <h2>Contact</h2>
 <p>Questions about this policy or your data can be sent to

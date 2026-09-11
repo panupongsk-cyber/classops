@@ -1,12 +1,35 @@
 # ClassOps v2 server
 
-This directory contains the PostgreSQL/Fastify shared core for ClassOps v2. It runs alongside the
-legacy Firebase application during migration; it does not change the current production
-deployment.
+This directory contains the PostgreSQL/Fastify backend for ClassOps v2. It is deployed as part of
+the live, self-hosted v2 pilot at
+[classops.pshomelab.dev](https://classops.pshomelab.dev/).
 
-## Included in this increment
+## Live pilot and browser-UI status
 
-- Google and Microsoft OAuth authentication (no password storage of any kind, ever)
+The live pilot uses **Google OAuth only** and has no password storage. The v2 browser surface is
+intentionally limited to sign-in, logout, and a minimal account page. It does **not** currently
+provide browser UI for Course/Section/Membership, Sessions/check-in, Exit Tickets, Random Picker,
+Gradebook, Class Feed, or Stats.
+
+The server capabilities documented below are implemented HTTP APIs with tests; they are not
+browser features yet. The legacy Firebase client remains in the source repository as a separate
+historical code path (`LegacyRoot`), but the public pilot hostname serves v2 and no Firebase data
+has been migrated into this database.
+
+The following pilot deferments are intentional:
+
+- **#712:** Microsoft OAuth is implemented in source but not configured in the live pilot.
+- **#721:** the live compose configuration keeps `TRUST_PROXY=false`; clients behind the public
+  proxy can therefore share a rate-limit bucket until the forwarding chain is verified and the
+  proxy configuration is changed deliberately.
+- **#732:** remaining operational QA/hardening (including production backup/restore evidence,
+  reboot recovery, alerting, and security checks) is deferred. Its eventual full feature
+  walkthrough must wait for the corresponding browser UI.
+
+## Server capabilities
+
+- Google OAuth authentication (live) plus an optional Microsoft OAuth implementation (not
+  configured in the live pilot; #712)
 - Opaque server-side sessions in secure HTTP-only cookies
 - PostgreSQL migration runner and audit log
 - Course / Section / Membership shared primitive: `Course` (reusable catalog entry, `type` of
@@ -27,9 +50,9 @@ duplicated per provider). Google deliberately omits the `hd` restriction; Micros
 `phase1-5-product-spec.md`). **ClassOps never links accounts across providers**: if a sign-in's
 email already belongs to a different provider's user, it's rejected, not merged.
 
-No module UI (attendance, ITPE quiz-app, OmniQuizOps) ships from this directory yet — see
-`ps-work:projects/personal/engineering/ClassOps/phase1-product-spec.md` for what is and isn't in
-this increment, and its later-phase specs for what builds on top of this shared core.
+No module UI ships with this server. In particular, attendance, exit tickets, picker, gradebook,
+feed, and stats are available only through the APIs described below; neither the legacy Firebase
+client nor these backend modules should be represented as user-facing v2 browser functionality.
 
 ### Phase 2a: Sessions, check-in, roster
 
@@ -189,7 +212,8 @@ In a second terminal, start the v2 frontend from the repository root:
 VITE_AUTH_MODE=v2 npm run dev
 ```
 
-The legacy Firebase UI remains the default whenever `VITE_AUTH_MODE` is absent or is not `v2`.
+The legacy Firebase UI remains the default source build whenever `VITE_AUTH_MODE` is absent or is
+not `v2`. That local build selection does not describe the live public v2 pilot.
 
 ## Google OAuth
 
@@ -207,7 +231,7 @@ suffix; access to classrooms is controlled by Course/Section membership instead.
 Production deployments must set `APP_BASE_URL` and `TRUSTED_ORIGINS` to their exact HTTPS origin.
 State-changing API calls without a matching `Origin` header are rejected in production.
 
-## Microsoft OAuth
+## Microsoft OAuth (source implementation; not live in the pilot)
 
 Create an Azure App Registration accepting accounts in any organizational directory **and**
 personal Microsoft accounts ("Accounts in any organizational directory and personal Microsoft
@@ -221,7 +245,8 @@ Then set `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, and `MICROSOFT_REDIRE
 same all-or-nothing rule as Google's three variables. Microsoft's ID token has no `email_verified`
 claim; ClassOps trusts the `email` claim as-is once it's present, rejecting sign-in if it's absent.
 This is a real, deliberately-accepted trade-off — see `phase1-5-product-spec.md`'s "Read this
-first" section for the reasoning.
+first" section for the reasoning. Do not configure only one or two values; the live Google-only
+pilot leaves all three Microsoft values unset while #712 remains deferred.
 
 ## `SEALED_PAYLOAD_ENCRYPTION_KEY`
 
