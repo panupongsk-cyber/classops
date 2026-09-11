@@ -1,51 +1,75 @@
 # ClassOps v2 production deployment pack
 
-Implements the deployment pack required by
-`ps-work:projects/personal/engineering/ClassOps/pilot-plan-macmini.md` and
-`phase1-deployment-spec.md`. **Everything here has been built and typechecked/tested locally
-only** — Docker was not available in the environment that wrote it, so the images have not
-actually been built or run, and none of it has touched the Mac mini. Exercise it end-to-end
-(`docker compose build`, `docker compose up`, all four scripts below, the full acceptance
-checklist) before treating it as pilot-ready.
+## Current deployment status
 
-## What this is
+As of 2026-09-11, this pack has been built, exercised on the Mac mini, and used to deploy the
+live self-hosted ClassOps v2 pilot at
+[classops.pshomelab.dev](https://classops.pshomelab.dev/). The public origin is routed through a
+Cloudflare Tunnel to the loopback-bound gateway on the host.
+
+This is a **Google-only, auth-only browser pilot**:
+
+- Google OAuth sign-in has been verified against the live origin. Microsoft OAuth code exists but
+  is intentionally not configured; its activation is deferred in PersonalSchema work-tracker
+  issue **#712**.
+- The browser UI currently offers sign-in, logout, and a minimal account page only. The server's
+  Course/Section/Membership, attendance, Exit Ticket, Random Picker, Gradebook, Class Feed, and
+  Stats APIs are not browser features yet.
+- The live compose configuration deliberately uses `TRUST_PROXY=false`. This means public clients
+  can share a rate-limit bucket behind the proxy; the verified proxy-chain configuration is
+  deferred in **#721**.
+- Further operational evidence — production backup/restore rehearsal, reboot recovery,
+  public-IP alerting, wider security checks, documentation review, and the eventual full feature
+  walkthrough — is deferred in **#732**. The walkthrough cannot be claimed until the relevant v2
+  UI has been built.
+
+The legacy Firebase client remains a historical source code path. It is not the service currently
+served at the public v2 pilot hostname.
+
+## What this pack provides
 
 | File | Role |
 |---|---|
 | `server/Dockerfile` | Multi-stage build for the API image; also used by the one-shot `migrate` service with an overridden command |
 | `ops/gateway/Dockerfile`, `ops/gateway/nginx.conf` | Builds the v2 frontend (`VITE_AUTH_MODE=v2`) and serves it same-origin with an nginx reverse proxy to `/api/*` |
 | `compose.v2.prod.yml` | Orchestrates `postgres` → `migrate` → `api` → `gateway`, with health checks, restart policies, resource limits, and a private network. Only `gateway` publishes a host port, bound to `127.0.0.1:8080` |
-| `ops/deploy/deploy.sh` | Idempotent deploy: build, migrate, start, wait for health |
+| `ops/deploy/deploy.sh` | Deploys a selected release: build, migrate, start, and wait for health |
 | `ops/deploy/health.sh` | Reports container health and hits `/health` through the gateway |
-| `ops/deploy/backup.sh` | Nightly `pg_dump --format=custom` inside the postgres container (no host DB port needed), SHA-256 checksum, keeps the newest 7 |
-| `ops/deploy/restore.sh` | Restores a dump into a disposable database, reports row counts, drops it — never touches the real database |
-| `ops/deploy/rollback.sh` | Mechanical rollback: stop the stack, repoint `/opt/classops/current` at a previous release, restart |
+| `ops/deploy/backup.sh` | Creates a PostgreSQL custom-format dump and SHA-256 checksum, retaining the newest seven dumps when invoked. Scheduling is external to this script. |
+| `ops/deploy/restore.sh` | Restores a dump into a disposable database, reports row counts, then drops it; it never targets the real database |
+| `ops/deploy/rollback.sh` | Stops the stack, repoints `/opt/classops/current` at a previous release, and restarts it |
 | `ops/deploy/classops.env.example` | Template for the out-of-Git production secrets file |
 
-## Prerequisites (not yet satisfied)
+## Operating requirements
 
-- Docker Engine and the Compose plugin on the target host.
-- The Phase 0 read-only host inventory from `pilot-plan-macmini.md`.
-- A real `~/.life-os/secrets/classops.env` filled from `classops.env.example` — `POSTGRES_PASSWORD`
-  and `SEALED_PAYLOAD_ENCRYPTION_KEY` (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`)
-  can be generated now; `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` require the
-  separately gated OAuth approval.
-- `APP_BASE_URL` set to the exact Tailscale MagicDNS HTTPS name once known.
+- Docker Engine and the Compose plugin must remain available on the target host.
+- Pass the existing production secrets file through `CLASSOPS_ENV_FILE`; never put its values in
+  Git or shell history. The example file documents the required names.
+- `APP_BASE_URL` and `TRUSTED_ORIGINS` must remain the exact public HTTPS origin:
+  `https://classops.pshomelab.dev`.
+- Google OAuth's three settings must stay configured together. Leave all three Microsoft settings
+  unset until #712 is deliberately resumed and an Azure App Registration is available.
+- Do not change `TRUST_PROXY` merely to address #721. First verify the exact proxy hop and
+  forwarded-header behaviour at the deployed boundary.
 
-## Usage (once the above are satisfied)
+## Operational commands
+
+These commands affect the live deployment. Run them only from the selected release with the
+correct secrets file and an understood rollback target.
 
 ```bash
-export CLASSOPS_ENV_FILE=~/.life-os/secrets/classops.env
+export CLASSOPS_ENV_FILE=/path/to/classops.env
 npm run v2:prod:deploy    # build, migrate, start, wait for health
 npm run v2:prod:health    # check container + /health status
-npm run v2:prod:backup    # nightly pg_dump + checksum, keeps newest 7
+npm run v2:prod:backup    # create a dump + checksum; external scheduling decides when it runs
 npm run v2:prod:restore   # disposable-database restore rehearsal
 npm run v2:prod:down      # stop the stack (volumes preserved)
 ```
 
-`ops/deploy/rollback.sh <previous-commit>` assumes the proposed host layout
-(`/opt/classops/releases/<source-commit>/`, `/opt/classops/current` symlink) from
-`pilot-plan-macmini.md` — set it up on first deploy, not by this pack.
+`ops/deploy/rollback.sh <previous-commit>` assumes the release layout
+`/opt/classops/releases/<source-commit>/` with `/opt/classops/current` as a symlink. It changes
+the active release and must be followed by the appropriate health verification.
 
-None of these scripts create an OAuth client, start Tailscale Serve, or touch DNS. Those stay
-gated by the approval-gate table in `pilot-plan-macmini.md`.
+The pack does not create OAuth clients or manage Cloudflare Tunnel/DNS configuration. Those are
+separate operational controls; retain the current public-routing boundary unless a scoped change
+is explicitly planned and verified.
