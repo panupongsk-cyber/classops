@@ -73,3 +73,37 @@ export const EMOJI_PALETTE = [
   '🐶', '🐱', '🦊', '🐼', '🐵', '🐸', '🐧', '🦁',
   '🐷', '🐮', '🐨', '🦄', '🐙', '🦋', '🐝', '🐢',
 ]
+
+export function openExitTicket(sessionId, prompt) {
+  return apiRequest(`/api/sessions/${sessionId}/exit-tickets`, {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  })
+}
+
+export function closeExitTicket(exitTicketId) {
+  return apiRequest(`/api/exit-tickets/${exitTicketId}/close`, { method: 'POST' })
+}
+
+export function getExitTicketResponses(exitTicketId) {
+  return apiRequest(`/api/exit-tickets/${exitTicketId}/responses`)
+}
+
+export function getOpenExitTicket(sessionId) {
+  return apiRequest(`/api/sessions/${sessionId}/exit-tickets/open`)
+}
+
+export function submitExitTicketResponse(exitTicketId, rating, comment) {
+  return apiRequest(`/api/exit-tickets/${exitTicketId}/responses`, {
+    method: 'POST',
+    body: JSON.stringify({ rating, ...(comment ? { comment } : {}) }),
+  })
+}
+
+export function pickStudent(sessionId) {
+  return apiRequest(`/api/sessions/${sessionId}/pick`, { method: 'POST' })
+}
+
+export function listPicks(sessionId) {
+  return apiRequest(`/api/sessions/${sessionId}/picks`)
+}
