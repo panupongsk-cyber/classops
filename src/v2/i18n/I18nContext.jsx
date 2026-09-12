@@ -29,7 +29,7 @@ export function I18nProvider({ children }) {
   const value = useMemo(() => ({
     lang,
     setLang,
-    t: (key) => translate(lang, key),
+    t: (key, values) => translate(lang, key, values),
   }), [lang, setLang])
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
