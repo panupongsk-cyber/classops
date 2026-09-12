@@ -4,6 +4,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import { ForbiddenState, LoadingRows, RetryableError } from '../components/StateViews.jsx'
 import { ApiError } from '../auth/api.js'
+import ExitTicketPanel from './ExitTicketPanel.jsx'
+import RandomPickerPanel from './RandomPickerPanel.jsx'
 import { listSessions } from './api.js'
 import { closeSession, getCurrentCode, getCurrentEmoji, getRoster } from './api.js'
 
@@ -133,6 +135,9 @@ export default function SessionLivePage() {
           </div>
         ))}
       </div>
+
+      <ExitTicketPanel sessionId={sessionId} />
+      {isOpen && <RandomPickerPanel sessionId={sessionId} />}
     </div>
   )
 }

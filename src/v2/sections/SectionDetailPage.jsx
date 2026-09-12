@@ -5,6 +5,7 @@ import { useI18n } from '../i18n/I18nContext.jsx'
 import { ForbiddenState, LoadingRows, RetryableError, RoleBadges } from '../components/StateViews.jsx'
 import { ApiError } from '../auth/api.js'
 import CheckInCard from '../attendance/CheckInCard.jsx'
+import ExitTicketStudentCard from '../attendance/ExitTicketStudentCard.jsx'
 import { getCourse, getSection, inviteMember, listMemberships, regenerateJoinCode, removeMember } from './api.js'
 
 const MANAGER_ROLES = ['owner', 'teacher', 'ta']
@@ -191,6 +192,7 @@ function StudentView({ data, myRoles }) {
         </div>
       </div>
       {course.type !== 'self_paced' && <CheckInCard sectionId={section.id} />}
+      {course.type !== 'self_paced' && <ExitTicketStudentCard sectionId={section.id} />}
 
       <div className="v2-notice v2-notice-info">{t('studentHomeCeiling')}</div>
       <div style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--v2-ink-muted)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 10 }}>
