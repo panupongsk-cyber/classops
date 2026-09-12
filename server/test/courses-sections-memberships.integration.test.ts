@@ -348,6 +348,39 @@ test(
       );
       assert.equal(anotherMembership.rowCount, 1);
       assert.deepEqual(anotherMembership.rows[0]?.roles, ["student"]);
+
+      // GET /api/me/sections lists only the caller's own memberships, with the joined
+      // Course/Section fields the v2 "My Sections" screen needs -- `another` is a member of
+      // exactly one Section (via the join above), not the second Section owned by them via a
+      // different route path, so this also confirms the join scoping is per-membership, not
+      // per-course.
+      const myOwnSections = await app.inject({
+        method: "GET",
+        url: "/api/me/sections",
+        headers: { cookie: another.cookie },
+      });
+      assert.equal(myOwnSections.statusCode, 200);
+      const listedSections = myOwnSections.json().sections as Array<{
+        section_id: string;
+        course_code: string;
+        roles: string[];
+      }>;
+      assert.equal(listedSections.length, 1);
+      assert.equal(listedSections[0]?.section_id, sectionId);
+      assert.equal(listedSections[0]?.course_code, "316121");
+      assert.deepEqual(listedSections[0]?.roles, ["student"]);
+
+      // A user with no memberships at all gets an empty list, not an error -- the platform admin
+      // never took a Membership row themselves in this test (ownerUserId was always someone
+      // else), which also confirms this endpoint does not implicitly show every Section to an
+      // admin the way other endpoints' `isPlatformAdmin` bypass does.
+      const noSections = await app.inject({
+        method: "GET",
+        url: "/api/me/sections",
+        headers: { cookie: admin.cookie },
+      });
+      assert.equal(noSections.statusCode, 200);
+      assert.deepEqual(noSections.json().sections, []);
     } finally {
       await app.close();
     }

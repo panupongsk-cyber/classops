@@ -27,6 +27,27 @@ export async function registerSectionRoutes(
 ) {
   const { pool, config } = dependencies;
 
+  // Caller-scoped list for the v2 "My Sections" screen: every Section the caller holds a
+  // Membership in, regardless of role. Avoids the alternative of fanning out GET /api/courses
+  // then GET /api/courses/:courseId client-side, which would also expose the full course catalog
+  // to every viewer just to find their own three Sections.
+  app.get("/api/me/sections", async (request, reply) => {
+    const user = await requireCurrentUser(request, reply, pool, config);
+    if (!user) return;
+    const result = await pool.query(
+      `SELECT section.id AS section_id, section.term, section.label,
+              course.id AS course_id, course.code AS course_code, course.title AS course_title,
+              course.type AS course_type, membership.roles
+       FROM memberships AS membership
+       JOIN sections AS section ON section.id = membership.section_id
+       JOIN courses AS course ON course.id = section.course_id
+       WHERE membership.user_id = $1
+       ORDER BY course.code, section.term, section.label`,
+      [user.id],
+    );
+    return reply.send({ sections: result.rows });
+  });
+
   app.get("/api/sections/:sectionId", async (request, reply) => {
     const user = await requireCurrentUser(request, reply, pool, config);
     if (!user) return;
