@@ -349,11 +349,12 @@ test(
       assert.equal(anotherMembership.rowCount, 1);
       assert.deepEqual(anotherMembership.rows[0]?.roles, ["student"]);
 
-      // GET /api/me/sections lists only the caller's own memberships, with the joined
-      // Course/Section fields the v2 "My Sections" screen needs -- `another` is a member of
-      // exactly one Section (via the join above), not the second Section owned by them via a
-      // different route path, so this also confirms the join scoping is per-membership, not
-      // per-course.
+      // GET /api/me/sections lists every Section the caller has a Membership in, with the
+      // joined Course/Section fields the v2 "My Sections" screen needs. `another` is a member of
+      // two Sections at this point: `owner` of `secondSectionId` (granted directly at that
+      // Section's creation above) and `student` of `sectionId` (via the join-code redemption
+      // above) -- asserting both, rather than just a count, also confirms the join scoping is
+      // per-membership, not per-course (both Sections share the same Course).
       const myOwnSections = await app.inject({
         method: "GET",
         url: "/api/me/sections",
@@ -365,10 +366,13 @@ test(
         course_code: string;
         roles: string[];
       }>;
-      assert.equal(listedSections.length, 1);
-      assert.equal(listedSections[0]?.section_id, sectionId);
-      assert.equal(listedSections[0]?.course_code, "316121");
-      assert.deepEqual(listedSections[0]?.roles, ["student"]);
+      assert.equal(listedSections.length, 2);
+      const joinedSection = listedSections.find((section) => section.section_id === sectionId);
+      const ownedSection = listedSections.find((section) => section.section_id === secondSectionId);
+      assert.equal(joinedSection?.course_code, "316121");
+      assert.deepEqual(joinedSection?.roles, ["student"]);
+      assert.equal(ownedSection?.course_code, "316121");
+      assert.deepEqual(ownedSection?.roles, ["owner"]);
 
       // A user with no memberships at all gets an empty list, not an error -- the platform admin
       // never took a Membership row themselves in this test (ownerUserId was always someone
