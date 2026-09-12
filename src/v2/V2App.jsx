@@ -3,6 +3,9 @@ import { useV2Auth } from './auth/V2AuthContext.jsx'
 import AppShell from './components/AppShell.jsx'
 import AccountPage from './pages/AccountPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import AttendancePage from './attendance/AttendancePage.jsx'
+import CheckInLandingPage from './attendance/CheckInLandingPage.jsx'
+import SessionLivePage from './attendance/SessionLivePage.jsx'
 import AddSectionPage from './sections/AddSectionPage.jsx'
 import CreateCoursePage from './sections/CreateCoursePage.jsx'
 import SectionDetailPage from './sections/SectionDetailPage.jsx'
@@ -22,9 +25,12 @@ export default function V2App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/v2/checkin" element={<CheckInLandingPage />} />
       <Route path="/v2/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
       <Route path="/v2/sections" element={<ShellRoute><SectionsPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId" element={<ShellRoute><SectionDetailPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/attendance" element={<ShellRoute><AttendancePage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/attendance/live/:sessionId" element={<ProtectedRoute><SessionLivePage /></ProtectedRoute>} />
       <Route path="/v2/courses/new" element={<ShellRoute><CreateCoursePage /></ShellRoute>} />
       <Route path="/v2/courses/:courseId/sections/new" element={<ShellRoute><AddSectionPage /></ShellRoute>} />
       <Route path="/v2" element={<Navigate to="/v2/sections" replace />} />

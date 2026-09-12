@@ -20,7 +20,10 @@ export default function AppShell({ children, sectionLabel }) {
     navigate('/login', { replace: true })
   }
 
+  const sectionMatch = location.pathname.match(/^\/v2\/sections\/([^/]+)/)
+  const sectionId = sectionMatch?.[1]
   const onMembershipRoute = /^\/v2\/sections\/[^/]+$/.test(location.pathname)
+  const onAttendanceRoute = /^\/v2\/sections\/[^/]+\/attendance/.test(location.pathname)
 
   return (
     <div className="v2-app">
@@ -48,10 +51,22 @@ export default function AppShell({ children, sectionLabel }) {
           <Link to="/v2/sections" className={`v2-navitem ${location.pathname === '/v2/sections' ? 'is-active' : ''}`}>
             {t('navSections')}
           </Link>
-          <div className={`v2-navitem ${onMembershipRoute ? 'is-active' : ''}`} style={{ opacity: onMembershipRoute ? 1 : 0.5 }}>
-            {t('navMembership')}
-          </div>
-          {!onMembershipRoute && <div className="v2-navhint">{t('navHint')}</div>}
+          {sectionId ? (
+            <>
+              <Link to={`/v2/sections/${sectionId}`} className={`v2-navitem ${onMembershipRoute ? 'is-active' : ''}`}>
+                {t('navMembership')}
+              </Link>
+              <Link to={`/v2/sections/${sectionId}/attendance`} className={`v2-navitem ${onAttendanceRoute ? 'is-active' : ''}`}>
+                {t('navAttendance')}
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="v2-navitem" style={{ opacity: 0.5 }}>{t('navMembership')}</div>
+              <div className="v2-navitem" style={{ opacity: 0.5 }}>{t('navAttendance')}</div>
+              <div className="v2-navhint">{t('navHint')}</div>
+            </>
+          )}
         </div>
         <div className="v2-content">{children}</div>
       </div>
