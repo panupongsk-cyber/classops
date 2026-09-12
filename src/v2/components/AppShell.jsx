@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useV2Auth } from '../auth/V2AuthContext.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
+import { listMemberships } from '../sections/api.js'
 import LangToggle from './LangToggle.jsx'
+
+const MANAGER_ROLES = ['owner', 'teacher', 'ta']
 
 function initialFor(name) {
   return (name || '?').trim().charAt(0).toUpperCase() || '?'
@@ -14,16 +17,35 @@ export default function AppShell({ children, sectionLabel }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [isManager, setIsManager] = useState(null) // null = unknown/loading
+
+  const sectionMatch = location.pathname.match(/^\/v2\/sections\/([^/]+)/)
+  const sectionId = sectionMatch?.[1]
+
+  // A plain student can't use Attendance or Gradebook (manager-only per their product specs);
+  // fetch the caller's own roles for the current Section once, rather than showing a nav item
+  // that always 403s for them. GET /api/sections/:sectionId/memberships allows any member (not
+  // manager-only), so this call itself never 403s for a student.
+  useEffect(() => {
+    if (!sectionId) { setIsManager(null); return }
+    let cancelled = false
+    listMemberships(sectionId).then((result) => {
+      if (cancelled) return
+      const mine = result.memberships.find((m) => m.user_id === user?.id)
+      setIsManager(Boolean(user?.isPlatformAdmin) || Boolean(mine?.roles.some((role) => MANAGER_ROLES.includes(role))))
+    }).catch(() => { if (!cancelled) setIsManager(false) })
+    return () => { cancelled = true }
+  }, [sectionId, user])
 
   async function signOut() {
     await logout()
     navigate('/login', { replace: true })
   }
 
-  const sectionMatch = location.pathname.match(/^\/v2\/sections\/([^/]+)/)
-  const sectionId = sectionMatch?.[1]
   const onMembershipRoute = /^\/v2\/sections\/[^/]+$/.test(location.pathname)
   const onAttendanceRoute = /^\/v2\/sections\/[^/]+\/attendance/.test(location.pathname)
+  const onGradebookRoute = /^\/v2\/sections\/[^/]+\/gradebook/.test(location.pathname)
+  const onFeedRoute = /^\/v2\/sections\/[^/]+\/feed/.test(location.pathname)
 
   return (
     <div className="v2-app">
@@ -56,14 +78,23 @@ export default function AppShell({ children, sectionLabel }) {
               <Link to={`/v2/sections/${sectionId}`} className={`v2-navitem ${onMembershipRoute ? 'is-active' : ''}`}>
                 {t('navMembership')}
               </Link>
-              <Link to={`/v2/sections/${sectionId}/attendance`} className={`v2-navitem ${onAttendanceRoute ? 'is-active' : ''}`}>
-                {t('navAttendance')}
+              <Link to={`/v2/sections/${sectionId}/feed`} className={`v2-navitem ${onFeedRoute ? 'is-active' : ''}`}>
+                {t('navFeed')}
               </Link>
+              {isManager && (
+                <>
+                  <Link to={`/v2/sections/${sectionId}/attendance`} className={`v2-navitem ${onAttendanceRoute ? 'is-active' : ''}`}>
+                    {t('navAttendance')}
+                  </Link>
+                  <Link to={`/v2/sections/${sectionId}/gradebook`} className={`v2-navitem ${onGradebookRoute ? 'is-active' : ''}`}>
+                    {t('navGradebook')}
+                  </Link>
+                </>
+              )}
             </>
           ) : (
             <>
               <div className="v2-navitem" style={{ opacity: 0.5 }}>{t('navMembership')}</div>
-              <div className="v2-navitem" style={{ opacity: 0.5 }}>{t('navAttendance')}</div>
               <div className="v2-navhint">{t('navHint')}</div>
             </>
           )}
