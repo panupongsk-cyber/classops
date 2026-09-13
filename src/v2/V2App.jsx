@@ -13,6 +13,7 @@ import AddSectionPage from './sections/AddSectionPage.jsx'
 import CreateCoursePage from './sections/CreateCoursePage.jsx'
 import SectionDetailPage from './sections/SectionDetailPage.jsx'
 import SectionsPage from './sections/SectionsPage.jsx'
+import StatsPage from './stats/StatsPage.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useV2Auth()
@@ -37,6 +38,7 @@ export default function V2App() {
       <Route path="/v2/sections/:sectionId/gradebook" element={<ShellRoute><GradebookPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/gradebook/assignments/:assignmentId/scores" element={<ShellRoute><AssignmentScoresPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/feed" element={<ShellRoute><FeedPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/stats" element={<ShellRoute><StatsPage /></ShellRoute>} />
       <Route path="/v2/courses/new" element={<ShellRoute><CreateCoursePage /></ShellRoute>} />
       <Route path="/v2/courses/:courseId/sections/new" element={<ShellRoute><AddSectionPage /></ShellRoute>} />
       <Route path="/v2" element={<Navigate to="/v2/sections" replace />} />

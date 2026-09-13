@@ -46,6 +46,7 @@ export default function AppShell({ children, sectionLabel }) {
   const onAttendanceRoute = /^\/v2\/sections\/[^/]+\/attendance/.test(location.pathname)
   const onGradebookRoute = /^\/v2\/sections\/[^/]+\/gradebook/.test(location.pathname)
   const onFeedRoute = /^\/v2\/sections\/[^/]+\/feed/.test(location.pathname)
+  const onStatsRoute = /^\/v2\/sections\/[^/]+\/stats/.test(location.pathname)
 
   return (
     <div className="v2-app">
@@ -80,6 +81,9 @@ export default function AppShell({ children, sectionLabel }) {
               </Link>
               <Link to={`/v2/sections/${sectionId}/feed`} className={`v2-navitem ${onFeedRoute ? 'is-active' : ''}`}>
                 {t('navFeed')}
+              </Link>
+              <Link to={`/v2/sections/${sectionId}/stats`} className={`v2-navitem ${onStatsRoute ? 'is-active' : ''}`}>
+                {t('navStats')}
               </Link>
               {isManager && (
                 <>
