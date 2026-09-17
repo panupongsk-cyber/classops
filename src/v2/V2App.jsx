@@ -13,6 +13,12 @@ import AddSectionPage from './sections/AddSectionPage.jsx'
 import CreateCoursePage from './sections/CreateCoursePage.jsx'
 import SectionDetailPage from './sections/SectionDetailPage.jsx'
 import SectionsPage from './sections/SectionsPage.jsx'
+import AdminOverviewPage from './admin/AdminOverviewPage.jsx'
+import AdminUsersPage from './admin/AdminUsersPage.jsx'
+import AdminCoursesPage from './admin/AdminCoursesPage.jsx'
+import AdminLiveSessionsPage from './admin/AdminLiveSessionsPage.jsx'
+import AdminAuditLogsPage from './admin/AdminAuditLogsPage.jsx'
+import { ForbiddenState } from './components/StateViews.jsx'
 import StatsPage from './stats/StatsPage.jsx'
 
 function ProtectedRoute({ children }) {
@@ -23,6 +29,14 @@ function ProtectedRoute({ children }) {
 
 function ShellRoute({ children }) {
   return <ProtectedRoute><AppShell>{children}</AppShell></ProtectedRoute>
+}
+
+function AdminRoute({ children }) {
+  const { user, loading } = useV2Auth()
+  if (loading) return <main className="v2-auth-page"><p>กำลังตรวจสอบการเข้าสู่ระบบ…</p></main>
+  if (!user) return <Navigate to="/login" replace />
+  if (!user.isPlatformAdmin) return <ShellRoute><ForbiddenState /></ShellRoute>
+  return <ShellRoute>{children}</ShellRoute>
 }
 
 export default function V2App() {
@@ -39,6 +53,11 @@ export default function V2App() {
       <Route path="/v2/sections/:sectionId/gradebook/assignments/:assignmentId/scores" element={<ShellRoute><AssignmentScoresPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/feed" element={<ShellRoute><FeedPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/stats" element={<ShellRoute><StatsPage /></ShellRoute>} />
+      <Route path="/v2/admin" element={<AdminRoute><AdminOverviewPage /></AdminRoute>} />
+      <Route path="/v2/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
+      <Route path="/v2/admin/courses" element={<AdminRoute><AdminCoursesPage /></AdminRoute>} />
+      <Route path="/v2/admin/live" element={<AdminRoute><AdminLiveSessionsPage /></AdminRoute>} />
+      <Route path="/v2/admin/audit" element={<AdminRoute><AdminAuditLogsPage /></AdminRoute>} />
       <Route path="/v2/courses/new" element={<ShellRoute><CreateCoursePage /></ShellRoute>} />
       <Route path="/v2/courses/:courseId/sections/new" element={<ShellRoute><AddSectionPage /></ShellRoute>} />
       <Route path="/v2" element={<Navigate to="/v2/sections" replace />} />

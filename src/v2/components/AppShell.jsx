@@ -62,6 +62,11 @@ export default function AppShell({ children, sectionLabel }) {
             {menuOpen && (
               <div className="v2-account-menu-panel" onMouseLeave={() => setMenuOpen(false)}>
                 <div className="v2-account-menu-email">{user?.email}</div>
+                {user?.isPlatformAdmin && (
+                  <Link to="/v2/admin" onClick={() => setMenuOpen(false)} style={{ fontWeight: 600, color: 'var(--v2-primary)' }}>
+                    ⚙️ {t('navAdminOverview')}
+                  </Link>
+                )}
                 <Link to="/v2/account" onClick={() => setMenuOpen(false)}>{t('accountLink')}</Link>
                 <button type="button" onClick={signOut}>{t('signOut')}</button>
               </div>
@@ -101,6 +106,44 @@ export default function AppShell({ children, sectionLabel }) {
               <div className="v2-navitem" style={{ opacity: 0.5 }}>{t('navMembership')}</div>
               <div className="v2-navhint">{t('navHint')}</div>
             </>
+          )}
+
+          {user?.isPlatformAdmin && (
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--v2-border)' }}>
+              <div style={{ fontSize: '.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--v2-ink-muted)', padding: '0 12px 8px' }}>
+                {t('navAdminHeader')}
+              </div>
+              <Link
+                to="/v2/admin"
+                className={`v2-navitem ${location.pathname === '/v2/admin' ? 'is-active' : ''}`}
+              >
+                {t('navAdminOverview')}
+              </Link>
+              <Link
+                to="/v2/admin/users"
+                className={`v2-navitem ${location.pathname.startsWith('/v2/admin/users') ? 'is-active' : ''}`}
+              >
+                {t('navAdminUsers')}
+              </Link>
+              <Link
+                to="/v2/admin/courses"
+                className={`v2-navitem ${location.pathname.startsWith('/v2/admin/courses') ? 'is-active' : ''}`}
+              >
+                {t('navAdminCourses')}
+              </Link>
+              <Link
+                to="/v2/admin/live"
+                className={`v2-navitem ${location.pathname.startsWith('/v2/admin/live') ? 'is-active' : ''}`}
+              >
+                {t('navAdminLive')}
+              </Link>
+              <Link
+                to="/v2/admin/audit"
+                className={`v2-navitem ${location.pathname.startsWith('/v2/admin/audit') ? 'is-active' : ''}`}
+              >
+                {t('navAdminAudit')}
+              </Link>
+            </div>
           )}
         </div>
         <div className="v2-content">{children}</div>

@@ -65,7 +65,14 @@ export default function SectionsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 className="v2-h1" style={{ margin: 0 }}>{t('mySectionsTitle')}</h1>
-        <button type="button" className="v2-btn v2-btn-secondary" onClick={() => setShowJoinModal(true)}>{t('joinWithCodeCta')}</button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {user?.isPlatformAdmin && (
+            <Link to="/v2/courses/new" className="v2-btn v2-btn-primary">
+              + {t('createCourseCta')}
+            </Link>
+          )}
+          <button type="button" className="v2-btn v2-btn-secondary" onClick={() => setShowJoinModal(true)}>{t('joinWithCodeCta')}</button>
+        </div>
       </div>
       <table className="v2-table">
         <thead>
