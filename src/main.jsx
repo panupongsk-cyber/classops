@@ -1,10 +1,8 @@
 import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import './index.css'
 
-const useV2Auth = import.meta.env.VITE_AUTH_MODE === 'v2'
-const RootApplication = lazy(() => useV2Auth ? import('./v2/V2Root.jsx') : import('./LegacyRoot.jsx'))
+const RootApplication = lazy(() => import('./v2/V2Root.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>

@@ -7,8 +7,6 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "emulators": "firebase emulators:start --project demo-attendance",
-    "start": "concurrently \"npm run emulators\" \"npm run dev\"",
     "v2:db:up": "docker compose -f compose.v2.dev.yml up -d postgres",
     "v2:db:down": "docker compose -f compose.v2.dev.yml down",
     "v2:migrate": "npm --prefix server run db:migrate",
@@ -22,12 +20,9 @@
     "v2:prod:down": "docker compose -f compose.v2.prod.yml --env-file \"$CLASSOPS_ENV_FILE\" down"
   },
   "dependencies": {
-    "firebase": "^12.12.0",
-    "html5-qrcode": "^2.3.8",
     "qrcode.react": "^3.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "uuid": "^9.0.1"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

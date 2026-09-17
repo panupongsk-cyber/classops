@@ -39,9 +39,5 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - name: Build legacy bundle
+      - name: Build frontend bundle
         run: npx vite build
-      - name: Build v2 bundle
-        run: npx vite build
-        env:
-          VITE_AUTH_MODE: v2

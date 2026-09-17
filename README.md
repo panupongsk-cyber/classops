@@ -15,9 +15,7 @@ As of 2026-09-11, ClassOps v2 is a live, self-hosted pilot at
 - **API versus feature availability:** the Fastify/PostgreSQL server contains and tests APIs for
   the classroom modules listed below. Those APIs are implementation foundations, **not** a claim
   that the corresponding feature is usable in a browser yet.
-- **Legacy distinction:** the Firebase client remains in the repository as the historical
-  `LegacyRoot` code path and can still be built for reference. The live hostname serves the v2
-  pilot, not the legacy Firebase application, and no Firebase data has been migrated into v2.
+- **Legacy distinction:** the historical Firebase client has been retired and pruned from the repository; ClassOps is now 100% v2.
 
 The pilot's remaining operational and product follow-ups are deliberately tracked separately:
 
@@ -58,15 +56,11 @@ For v2 development, start the local database, configure the server variables des
 
 ```bash
 npm run v2:db:up
-VITE_AUTH_MODE=v2 npm run dev
+npm run dev
 ```
 
 Vite proxies `/api` to `http://127.0.0.1:3000`, keeping the browser session same-origin during
 development. `VITE_API_BASE_URL` can point to a separate API origin when required.
-
-The legacy Firebase client is a separate historical code path. To inspect it locally, configure
-its Firebase environment variables from `.env.example` and run `npm run dev` without
-`VITE_AUTH_MODE=v2`. That build does not describe the live v2 pilot.
 
 ## Historical v1 feature history
 
