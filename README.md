@@ -1,82 +1,33 @@
-# ClassOps
+# ClassOps v2 — application source
 
-## Live ClassOps v2 pilot
+This is the v2 application source (Vite/React frontend, Fastify/PostgreSQL server) for ClassOps,
+migrated here so ongoing development happens under the PersonalSchema task/PR workflow. See
+[`../README.md`](../README.md) for the project's status, milestones, and deferred follow-ups, and
+[`../PUBLISHING.md`](../PUBLISHING.md) for the release/publication contract.
 
-As of 2026-09-11, ClassOps v2 is a live, self-hosted pilot at
-[classops.pshomelab.dev](https://classops.pshomelab.dev/).
+## Scope of this import
 
-- **Live authentication:** Google OAuth only. ClassOps does not store passwords. The source (and
-  login shell) includes an optional Microsoft OAuth implementation, but it is intentionally not
-  configured or usable in the live pilot; its activation is deferred in PersonalSchema
-  work-tracker issue **#712**.
-- **Live browser UI:** authentication only — Google sign-in, logout, and a minimal account page.
-  There is currently no browser UI for course or section setup, membership, attendance,
-  check-in, exit tickets, random picker, gradebook, class feed, or statistics.
-- **API versus feature availability:** the Fastify/PostgreSQL server contains and tests APIs for
-  the classroom modules listed below. Those APIs are implementation foundations, **not** a claim
-  that the corresponding feature is usable in a browser yet.
-- **Legacy distinction:** the historical Firebase client has been retired and pruned from the repository; ClassOps is now 100% v2.
+Only the v2 application is here — the legacy Firebase-based attendance app (`LegacyRoot`, `App.jsx`,
+`src/context/`, `src/components/`, `src/pages/`, `src/firebase/`, `firebase.json`,
+`firestore.rules`) was intentionally left out. It remains paused (see
+`../../../../teaching/classops/README.md`, `PS-PROJECT-classops`) and still lives only in the
+external repository below. `src/v2/` is fully self-contained and never imported anything from the
+dropped legacy tree, so nothing here depends on it.
 
-The pilot's remaining operational and product follow-ups are deliberately tracked separately:
+`package.json` and `package-lock.json` were trimmed to match: the `firebase`, `html5-qrcode`, and
+`uuid` dependencies (legacy-only) and the `emulators`/`start` scripts (Firebase emulator) were
+removed; `qrcode.react` was kept because `src/v2/attendance/SessionLivePage.jsx` uses it too.
 
-- **#712 — Microsoft OAuth:** deferred until an Azure application and a user need it.
-- **#721 — proxy-aware rate limiting:** `TRUST_PROXY=false` is an accepted pilot limitation, so
-  traffic behind the public proxy can share a rate-limit bucket. Do not enable proxy trust without
-  first verifying the exact forwarding chain.
-- **#732 — remaining QA and hardening:** production backup/restore evidence, reboot recovery,
-  public-IP alerting, broader security checks, documentation review, and the eventual full
-  feature walkthrough are deferred. A full feature walkthrough cannot be completed until the
-  applicable v2 browser UI exists.
+## Source and deployment relationship
 
-## v2 server capabilities (API only)
-
-The v2 server lives in [`server/`](server/README.md). Its APIs and integration tests currently
-cover the following modules:
-
-| Module | Backend/API status | Browser-feature status |
-| --- | --- | --- |
-| Authentication and sessions | Google OAuth live; optional Microsoft implementation deferred | Sign-in, logout, and account page only |
-| Course, Section, Membership | Implemented | No UI |
-| Sessions, QR/Emoji check-in, roster | Implemented | No UI |
-| Exit Tickets and Random Picker | Implemented | No UI |
-| Gradebook and CSV export | Implemented | No UI |
-| Class Feed | Implemented | No UI |
-| Stats aggregation | Implemented | No UI |
-
-## Local development
-
-Install the repository dependencies:
-
-```bash
-npm install
-```
-
-For v2 development, start the local database, configure the server variables described in the
-[server README](server/README.md), then start the v2 browser shell:
-
-```bash
-npm run v2:db:up
-npm run dev
-```
-
-Vite proxies `/api` to `http://127.0.0.1:3000`, keeping the browser session same-origin during
-development. `VITE_API_BASE_URL` can point to a separate API origin when required.
-
-## Historical v1 feature history
-
-The following records the Firebase-era v1 product history. It is retained for provenance and is
-not a statement of functionality available in the current v2 pilot.
-
-### v1.1.0 (2026-04-15)
-
-- **Class Feed:** a unified timeline intended to replace Teams/Moodle for announcements,
-  resources, and assignments; text announcements, PDF/image attachments, interactive links,
-  real-time updates, likes, and comments for contextual Q&A.
-- **Attendance:** dynamic roster management plus QR Code, emoji challenge, and GPS-verified
-  check-ins.
-- **Classroom activities:** exit tickets for real-time feedback and an interactive random picker.
-- **Grading and analytics:** assignment workflow with feedback, a gradebook with CSV export, and
-  a statistics dashboard for attendance and engagement.
-- **Branding and UI:** rebranded from “Attendance” to “ClassOps” and added Feed/Attendance tabs
-  for teachers and students.
-- **Security:** Firebase configuration moved to environment variables.
+- **Origin:** [panupongsk-cyber/classops](https://github.com/panupongsk-cyber/classops), public
+  repo, commit `cc40bf3538a3dbf08183d32eb9e7c2eb1608188c` at import time (squashed, not a full
+  history import — see `PS-TASK-20260917-249`).
+- **Development:** happens here from now on, through the normal PersonalSchema task/PR flow.
+- **Deployment:** production on `ps-homelab-macmini` still `git clone`s
+  `panupongsk-cyber/classops` directly (see `../pilot-activation-deployment-spec.md`) — that stays
+  unchanged, deliberately, so the deployment credential never needs access to this private
+  monorepo (see `../PUBLISHING.md`'s source boundary). After each merge here that touches this
+  folder, its current state is exported back out to `panupongsk-cyber/classops`'s `main` so the
+  external repo keeps serving as the sole deploy target. That export is a manual step run locally
+  (never a PersonalSchema CI secret — this repo never adds privileged CI credentials).

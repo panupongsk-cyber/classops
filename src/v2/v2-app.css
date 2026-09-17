@@ -148,3 +148,91 @@
   .v2-content { padding: 20px 16px; }
   .v2-section-switcher { display: none; }
 }
+
+/* Admin Console & Stat Cards */
+.v2-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.v2-stat-card {
+  background: #fff;
+  border: 1px solid var(--v2-border);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(30,41,59,.04);
+}
+.v2-stat-title {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--v2-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 8px;
+}
+.v2-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--v2-ink);
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+.v2-stat-hint {
+  font-size: .78rem;
+  color: var(--v2-ink-faint);
+}
+
+.v2-btn-sm {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: .8rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.v2-btn-sm:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.v2-btn-outline {
+  background: #fff;
+  border-color: var(--v2-border-strong);
+  color: var(--v2-ink);
+}
+.v2-btn-outline:hover:not(:disabled) {
+  background: var(--v2-bg);
+}
+.v2-btn-danger {
+  background: var(--v2-error-bg);
+  border-color: #fca5a5;
+  color: var(--v2-error-fg);
+}
+.v2-btn-danger:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.v2-badge-active { background: var(--v2-success-bg); color: var(--v2-success-fg); }
+.v2-badge-suspended { background: var(--v2-error-bg); color: var(--v2-error-fg); }
+
+.v2-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+.v2-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+}

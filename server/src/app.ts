@@ -6,6 +6,7 @@ import Fastify from "fastify";
 
 import type { AppConfig } from "./config.js";
 import type { DatabasePool } from "./db.js";
+import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCourseRoutes } from "./routes/courses.js";
 import { registerExitTicketRoutes } from "./routes/exit-tickets.js";
@@ -83,6 +84,7 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   await registerGradebookRoutes(app, { pool, config });
   await registerFeedRoutes(app, { pool, config });
   await registerStatsRoutes(app, { pool, config });
+  await registerAdminRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {
     if (reply.sent) return;
