@@ -6,6 +6,8 @@ import Fastify from "fastify";
 
 import type { AppConfig } from "./config.js";
 import type { DatabasePool } from "./db.js";
+import { sessionRateLimitKey } from "./rate-limit-key.js";
+import { registerActivityRoutes } from "./routes/activities.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCourseRoutes } from "./routes/courses.js";
@@ -48,10 +50,12 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
       callback(Object.assign(new Error("Origin is not allowed"), { statusCode: 403 }), false);
     },
   });
+  // Per signed-in user where the session verifies, else per IP (see rate-limit-key.ts).
   await app.register(rateLimit, {
     global: true,
     max: 100,
     timeWindow: "1 minute",
+    keyGenerator: sessionRateLimitKey(pool, config),
   });
 
   app.addHook("onRequest", async (request, reply) => {
@@ -84,6 +88,7 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   await registerGradebookRoutes(app, { pool, config });
   await registerFeedRoutes(app, { pool, config });
   await registerStatsRoutes(app, { pool, config });
+  await registerActivityRoutes(app, { pool, config });
   await registerAdminRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {

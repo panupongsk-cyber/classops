@@ -12,8 +12,17 @@ export function addSection(courseId, payload) {
   return apiRequest(`/api/courses/${courseId}/sections`, { method: 'POST', body: JSON.stringify(payload) })
 }
 
-export function joinSection(code) {
-  return apiRequest('/api/sections/join', { method: 'POST', body: JSON.stringify({ code }) })
+export function joinSection(code, studentId) {
+  const body = studentId ? { code, studentId } : { code }
+  return apiRequest('/api/sections/join', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function getMyStudentId(sectionId) {
+  return apiRequest(`/api/sections/${sectionId}/me/student-id`)
+}
+
+export function setMyStudentId(sectionId, studentId) {
+  return apiRequest(`/api/sections/${sectionId}/me/student-id`, { method: 'PUT', body: JSON.stringify({ studentId }) })
 }
 
 export function getSection(sectionId) {

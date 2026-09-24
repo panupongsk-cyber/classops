@@ -8,7 +8,10 @@ import type { AppConfig } from "../config.js";
 import { requireCurrentUser } from "../current-user.js";
 import type { DatabasePool } from "../db.js";
 
-const joinSchema = z.object({ code: z.string().trim().min(1).max(64) });
+// Learner-entered student ID (not treated as sensitive, but only ever shown to Section managers).
+const studentIdSchema = z.string().trim().regex(/^[0-9A-Za-z-]{1,32}$/);
+const joinSchema = z.object({ code: z.string().trim().min(1).max(64), studentId: studentIdSchema.optional() });
+const myStudentIdSchema = z.object({ studentId: studentIdSchema.nullable() });
 
 function generateJoinCode() {
   return randomBytes(6).toString("base64url");
@@ -80,15 +83,46 @@ export async function registerSectionRoutes(
     if (!sectionId) return reply.code(400).send({ error: "INVALID_JOIN_CODE" });
 
     await pool.query(
-      `INSERT INTO memberships (user_id, section_id, roles)
-       VALUES ($1, $2, ARRAY['student'])
+      `INSERT INTO memberships (user_id, section_id, roles, student_id)
+       VALUES ($1, $2, ARRAY['student'], $3)
        ON CONFLICT (user_id, section_id) DO UPDATE
        SET roles = CASE WHEN 'student' = ANY(memberships.roles) THEN memberships.roles
                         ELSE array_append(memberships.roles, 'student') END,
+           student_id = COALESCE(EXCLUDED.student_id, memberships.student_id),
            updated_at = now()`,
-      [user.id, sectionId],
+      [user.id, sectionId, parsed.data.studentId ?? null],
     );
     return reply.send({ sectionId, roles: ["student"] });
+  });
+
+  // The caller's own student ID in one Section: read, set, or clear (null).
+  app.get("/api/sections/:sectionId/me/student-id", async (request, reply) => {
+    const user = await requireCurrentUser(request, reply, pool, config);
+    if (!user) return;
+    const { sectionId } = request.params as { sectionId: string };
+    if (!z.uuid().safeParse(sectionId).success) return reply.code(400).send({ error: "INVALID_REQUEST" });
+    const result = await pool.query<{ student_id: string | null }>(
+      "SELECT student_id FROM memberships WHERE user_id = $1 AND section_id = $2",
+      [user.id, sectionId],
+    );
+    if (!result.rowCount) return reply.code(403).send({ error: "FORBIDDEN" });
+    return reply.send({ studentId: result.rows[0]?.student_id ?? null });
+  });
+
+  app.put("/api/sections/:sectionId/me/student-id", async (request, reply) => {
+    const user = await requireCurrentUser(request, reply, pool, config);
+    if (!user) return;
+    const { sectionId } = request.params as { sectionId: string };
+    if (!z.uuid().safeParse(sectionId).success) return reply.code(400).send({ error: "INVALID_REQUEST" });
+    const parsed = myStudentIdSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
+    const result = await pool.query<{ student_id: string | null }>(
+      `UPDATE memberships SET student_id = $3, updated_at = now()
+       WHERE user_id = $1 AND section_id = $2 RETURNING student_id`,
+      [user.id, sectionId, parsed.data.studentId],
+    );
+    if (!result.rowCount) return reply.code(403).send({ error: "FORBIDDEN" });
+    return reply.send({ studentId: result.rows[0]?.student_id ?? null });
   });
 
   app.post("/api/sections/:sectionId/join-code/regenerate", async (request, reply) => {

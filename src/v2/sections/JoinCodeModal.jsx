@@ -5,6 +5,7 @@ import { joinSection } from './api.js'
 export default function JoinCodeModal({ onClose, onJoined }) {
   const { t } = useI18n()
   const [code, setCode] = useState('')
+  const [studentId, setStudentId] = useState('')
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -13,7 +14,7 @@ export default function JoinCodeModal({ onClose, onJoined }) {
     setError(null)
     setSubmitting(true)
     try {
-      const result = await joinSection(code.trim())
+      const result = await joinSection(code.trim(), studentId.trim() || undefined)
       onJoined(result.sectionId)
     } catch {
       setError(t('joinInvalidCode'))
@@ -37,6 +38,18 @@ export default function JoinCodeModal({ onClose, onJoined }) {
             required
           />
           {error && <p className="v2-field-error">{error}</p>}
+        </div>
+        <div className="v2-field">
+          <label htmlFor="join-student-id-input">{t('studentIdLabelOptional')}</label>
+          <input
+            id="join-student-id-input"
+            value={studentId}
+            onChange={(event) => setStudentId(event.target.value)}
+            pattern="[0-9A-Za-z\-]{1,32}"
+            maxLength={32}
+            placeholder={t('studentIdPlaceholder')}
+          />
+          <p className="v2-field-hint">{t('studentIdHint')}</p>
         </div>
         <div className="v2-btn-row">
           <button type="button" className="v2-btn v2-btn-secondary" onClick={onClose}>{t('joinCancel')}</button>

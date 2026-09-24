@@ -3,7 +3,12 @@ import * as oidc from "openid-client";
 
 import type { AppConfig } from "../config.js";
 import type { DatabasePool } from "../db.js";
-import { startOAuthTransaction, upsertOAuthUser, verifyOAuthTransaction } from "../oauth-flow.js";
+import {
+  OAUTH_START_RATE_LIMIT,
+  startOAuthTransaction,
+  upsertOAuthUser,
+  verifyOAuthTransaction,
+} from "../oauth-flow.js";
 import { normalizeEmail } from "../security.js";
 import { issueSession } from "../session.js";
 
@@ -43,7 +48,7 @@ export async function registerGoogleOAuthRoutes(
 
   app.get(
     "/api/auth/google",
-    { config: { rateLimit: { max: 20, timeWindow: "15 minutes" } } },
+    { config: { rateLimit: OAUTH_START_RATE_LIMIT } },
     async (_request, reply) => {
       const client = await googleConfigPromise;
       const { state, nonce, codeChallenge } = await startOAuthTransaction(pool, config, reply, {

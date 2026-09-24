@@ -15,3 +15,10 @@ test("OAuth browser binding accepts only the browser that started the flow", () 
   assert.equal(oauthBrowserBindingMatches(generateOpaqueToken(), expectedHash), false);
   assert.equal(oauthBrowserBindingMatches(browserBinding, undefined), false);
 });
+
+test("OAuth-start rate limit allows a large class to sign in through one shared IP", async () => {
+  const { OAUTH_START_RATE_LIMIT } = await import("../src/oauth-flow.js");
+  // Raised from 20 on 2026-09-25 (PS-TASK-20260925-696): with TRUST_PROXY=false every anonymous
+  // request carries the gateway IP, so this bucket is class-wide until #721 lands.
+  assert.deepEqual(OAUTH_START_RATE_LIMIT, { max: 200, timeWindow: "15 minutes" });
+});
