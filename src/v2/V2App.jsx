@@ -20,6 +20,10 @@ import AdminLiveSessionsPage from './admin/AdminLiveSessionsPage.jsx'
 import AdminAuditLogsPage from './admin/AdminAuditLogsPage.jsx'
 import { ForbiddenState } from './components/StateViews.jsx'
 import StatsPage from './stats/StatsPage.jsx'
+import ActivitiesPage from './activities/ActivitiesPage.jsx'
+import AttemptPage from './activities/AttemptPage.jsx'
+import EvidencePage from './activities/EvidencePage.jsx'
+import PlayerPage from './activities/PlayerPage.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useV2Auth()
@@ -53,6 +57,10 @@ export default function V2App() {
       <Route path="/v2/sections/:sectionId/gradebook/assignments/:assignmentId/scores" element={<ShellRoute><AssignmentScoresPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/feed" element={<ShellRoute><FeedPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/stats" element={<ShellRoute><StatsPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/activities" element={<ShellRoute><ActivitiesPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/activities/:activityId/play" element={<ShellRoute><PlayerPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/activities/:activityId/evidence" element={<ShellRoute><EvidencePage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/activities/attempts/:attemptId" element={<ShellRoute><AttemptPage /></ShellRoute>} />
       <Route path="/v2/admin" element={<AdminRoute><AdminOverviewPage /></AdminRoute>} />
       <Route path="/v2/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
       <Route path="/v2/admin/courses" element={<AdminRoute><AdminCoursesPage /></AdminRoute>} />

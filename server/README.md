@@ -179,6 +179,61 @@ exists.
 No new environment variable, container, background worker, or database table (see
 `phase2b4-deployment-spec.md`).
 
+### Learning activities (server-scored games)
+
+The plan is `../../classops-learning-games-development-plan.md`, and the server was built in
+PS-TASK-20260925-687. The v2 UI is under `src/v2/activities/` (PS-TASK-20260925-693).
+
+- **Migration and code.** Migration `011_learning_activities.sql` adds `activity_packages`,
+  `section_activities`, `activity_attempts`, `activity_responses`, and
+  `memberships.student_id`. The engine is in `src/activities/engine.ts`: a port of the private
+  reference engine that holds no activity content. The routes are in `src/routes/activities.ts`.
+- **Packages come from outside this repository.** They carry answer keys and are imported at
+  run time:
+  `node dist/scripts/import-activity.js <package.json>` (or `npx tsx src/scripts/import-activity.ts ...`).
+  Re-importing an identical `(slug, version)` does nothing. Changed content under an existing
+  version is refused.
+  - Never commit a real package, and never commit fixtures derived from one. Tests use
+    `test/fixtures/synthetic-activity.ts`.
+- **What reaches the browser.** It receives only `projectItem()` views: options and rows are
+  opaque tokens for that attempt. Answers come back as those tokens, and the server scores them.
+  The per-attempt `shuffle_seed` never leaves the server.
+- **Routes:**
+  - Catalog, for staff: `GET /api/activity-packages`.
+  - Section activities: `GET/POST /api/sections/:sectionId/activities` and
+    `PATCH /api/section-activities/:id`.
+  - Play, for learners with the `student` role: `POST /api/section-activities/:id/attempts`
+    (start or resume), `POST /api/activity-attempts/:id/responses` (one item at a time, in order),
+    and `POST /api/activity-attempts/:id/finish`.
+  - Review, for the owner or a manager: `GET /api/activity-attempts/:id`.
+  - Evidence, manager-only: `GET /api/section-activities/:id/evidence` and `.../evidence/export`
+    (CSV).
+  - Student ID: `POST /api/sections/join` accepts an optional `studentId`, and
+    `GET/PUT /api/sections/:sectionId/me/student-id` reads, sets, or clears it. It is never
+    exposed through the member-visible roster.
+- **Rate limit.** Every route is limited per **verified signed-in user**, not per IP
+  (`src/rate-limit-key.ts`, PS-TASK-20260925-693). A whole class shares one IP twice over: the
+  campus NAT, and the tunnel with `TRUST_PROXY=false` (#721).
+  - **Traffic before sign-in is still limited per IP, and with `TRUST_PROXY=false` every
+    client has the same IP (the gateway).** That affects the anonymous `/api/auth/me`, the
+    OAuth start route (`/api/auth/google`), and the OAuth callback. All of them are effectively
+    capped for everyone at once. The OAuth start limit was raised from 20 to **200 per 15
+    minutes** on 2026-09-25 (`OAUTH_START_RATE_LIMIT`, PS-TASK-20260925-696), so a class can sign
+    in together. #721 is still the fix for per-client limits on anonymous requests.
+  - The per-route limits (check-in and exit tickets at 20/min, OAuth start) now also count per
+    signed-in user. A student with several accounts therefore gets that many buckets.
+  - The key is the user id, but only when the session cookie maps to a live session.
+    Unverifiable cookies and anonymous requests share the client's IP bucket, so random cookie
+    values cannot mint fresh buckets.
+  - Each keyed request costs one session lookup. If that lookup fails, the request falls back to
+    the IP bucket.
+  - The app-wide limit stays 100/min. The learner-facing activity routes (start, respond,
+    finish, list, review) have their own 60/min bucket per user, so answering items and loading
+    pages don't starve each other.
+- **CSV exports.** Every CSV export, including the gradebook export, now goes through
+  `src/csv.ts`. It quotes `\r` and prefixes cells that start with `=`, `+`, `-`, `@`, tab, or CR,
+  so formulas can't be injected.
+
 ## Local development
 
 Start PostgreSQL from the repository root:
@@ -264,7 +319,7 @@ npm run v2:test
 ```
 
 The Course/Section/Membership, Sessions, Exit Tickets/Random Picker, Gradebook, Class Feed, and
-Stats Dashboard integration
+Stats Dashboard, and Learning Activities integration
 tests run when
 `TEST_DATABASE_URL` is present:
 

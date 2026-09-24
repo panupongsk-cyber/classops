@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useV2Auth } from '../auth/V2AuthContext.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import { ForbiddenState, LoadingRows, RetryableError, RoleBadges } from '../components/StateViews.jsx'
 import { ApiError } from '../auth/api.js'
 import CheckInCard from '../attendance/CheckInCard.jsx'
 import ExitTicketStudentCard from '../attendance/ExitTicketStudentCard.jsx'
+import StudentIdCard from './StudentIdCard.jsx'
 import { getCourse, getSection, inviteMember, listMemberships, regenerateJoinCode, removeMember } from './api.js'
 
 const MANAGER_ROLES = ['owner', 'teacher', 'ta']
@@ -191,6 +192,13 @@ function StudentView({ data, myRoles }) {
           <RoleBadges roles={myRoles} />
         </div>
       </div>
+      {myRoles.includes('student') && <StudentIdCard sectionId={section.id} />}
+      {/* The side nav is hidden on phones, so the activities entry point also lives here. */}
+      <Link to={`/v2/sections/${section.id}/activities`} className="v2-card v2-activities-link" style={{ marginBottom: 14 }}>
+        <span aria-hidden="true">🎮</span>
+        <span><strong>{t('navActivities')}</strong><br /><span className="v2-subtext">{t('activitiesStudentSubtext')}</span></span>
+        <span aria-hidden="true">→</span>
+      </Link>
       {course.type !== 'self_paced' && <CheckInCard sectionId={section.id} />}
       {course.type !== 'self_paced' && <ExitTicketStudentCard sectionId={section.id} />}
 

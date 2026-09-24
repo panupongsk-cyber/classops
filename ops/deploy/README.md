@@ -70,6 +70,24 @@ npm run v2:prod:down      # stop the stack (volumes preserved)
 `/opt/classops/releases/<source-commit>/` with `/opt/classops/current` as a symlink. It changes
 the active release and must be followed by the appropriate health verification.
 
+### Importing learning-activity packages
+
+Learning-activity packages carry answer keys, so they are **never** in this repository or its
+image. They are supplied at run time from a host directory mounted read-only into the one-shot
+`migrate` service. `migrate` has no entrypoint, so the command below replaces its default
+`migrate.js`.
+
+```bash
+export CLASSOPS_ENV_FILE=/path/to/classops.env
+dir=~/.personalschema/state/classops/activity-packages   # mode 755, files 644 (container user must read them)
+docker compose -f compose.v2.prod.yml --env-file "$CLASSOPS_ENV_FILE" run --rm \
+  -v "$dir":/packages:ro migrate node dist/scripts/import-activity.js /packages/<slug>.json
+```
+
+Re-importing identical content under the same `(slug, version)` does nothing, and changed
+content under an existing version is refused. Delete the package files from the host once they
+are imported.
+
 The pack does not create OAuth clients or manage Cloudflare Tunnel/DNS configuration. Those are
 separate operational controls; retain the current public-routing boundary unless a scoped change
 is explicitly planned and verified.

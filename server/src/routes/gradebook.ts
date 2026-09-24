@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { canManageSessions, getSectionRoles } from "../authz.js";
 import type { AppConfig } from "../config.js";
+import { toCsv } from "../csv.js";
 import { requireCurrentUser } from "../current-user.js";
 import type { DatabasePool } from "../db.js";
 import { withTransaction } from "../db.js";
@@ -34,11 +35,6 @@ function validationError(reply: FastifyReply, error: z.ZodError) {
     error: "INVALID_REQUEST",
     fields: error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
   });
-}
-
-function csvEscape(value: string) {
-  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
 }
 
 function formatNumber(value: number | undefined | null) {
@@ -407,9 +403,7 @@ export async function registerGradebookRoutes(
       ];
     });
 
-    const csv = [header, ...rows]
-      .map((row) => row.map((cell) => csvEscape(String(cell))).join(","))
-      .join("\n");
+    const csv = toCsv([header, ...rows]);
     return reply.type("text/csv; charset=utf-8").send(csv);
   });
 }
