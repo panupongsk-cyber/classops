@@ -419,6 +419,13 @@ export const translations = {
     studentIdSaved: "บันทึกแล้ว",
     studentIdSaveFailed: "บันทึกไม่สำเร็จ ลองใหม่",
     studentIdInvalid: "ใช้ได้เฉพาะตัวเลข ตัวอักษรอังกฤษ และ - (ไม่เกิน 32 ตัว)",
+    activityOrderHint: "แตะขั้นตอนตามลำดับจากขั้นแรกไปขั้นสุดท้าย",
+    activityOrderYours: "ลำดับของคุณ",
+    activityOrderUndo: "ย้อนหนึ่งขั้น",
+    activityOrderReset: "เริ่มลำดับใหม่",
+    activityOrderCorrect: "ลำดับที่ถูกต้อง:",
+    activityTagHint: "ติดแท็กให้ทุกข้อที่เลือก",
+    activityMatrixHint: "เลือกอย่างน้อยหนึ่งข้อในทุกหมวดของแต่ละรายการ",
   },
   en: {
     navSections: 'My Sections',
@@ -836,6 +843,13 @@ export const translations = {
     studentIdSaved: "Saved",
     studentIdSaveFailed: "Could not save. Please try again.",
     studentIdInvalid: "Use digits, English letters, and - only (up to 32 characters).",
+    activityOrderHint: "Tap the steps in order, from first to last.",
+    activityOrderYours: "Your order",
+    activityOrderUndo: "Undo last step",
+    activityOrderReset: "Reset order",
+    activityOrderCorrect: "Correct order:",
+    activityTagHint: "Tag every option you picked.",
+    activityMatrixHint: "Choose at least one in every group for each entry.",
   },
 }
 
