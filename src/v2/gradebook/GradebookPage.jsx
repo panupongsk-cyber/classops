@@ -79,8 +79,8 @@ export default function GradebookPage() {
             onChanged={load}
           />
         ))}
-        <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginTop: 16 }}>
-          <div className="v2-field" style={{ margin: 0, flex: 1 }}>
+        <form onSubmit={handleAddCategory} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', marginTop: 16 }}>
+          <div className="v2-field" style={{ margin: 0, flex: '1 1 160px' }}>
             <label htmlFor="category-name">{t('categoryNameLabel')}</label>
             <input id="category-name" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} required />
           </div>
@@ -154,15 +154,15 @@ function CategoryBlock({ category, assignments, onDeleteCategory, onChanged }) {
         <div key={assignment.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '.85rem' }}>
           <span>{assignment.name} <span className="is-muted">/ {assignment.max_points}</span></span>
           <span>
-            <Link to={`/v2/sections/${sectionId}/gradebook/assignments/${assignment.id}/scores`} style={{ marginRight: 12, fontSize: '.8rem' }}>{t('enterScoresAction')}</Link>
+            <Link to={`/v2/sections/${sectionId}/gradebook/assignments/${assignment.id}/scores`} className="v2-link-action" style={{ marginRight: 12, fontSize: '.8rem' }}>{t('enterScoresAction')}</Link>
             <button type="button" className="v2-btn v2-btn-secondary" style={{ padding: '2px 8px', fontSize: '.72rem' }} onClick={() => handleDeleteAssignment(assignment.id)}>{t('remove')}</button>
           </span>
         </div>
       ))}
-      <form onSubmit={handleAddAssignment} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 10 }}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('assignmentNameLabel')} required style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--v2-border-strong)', borderRadius: 8, fontSize: '.85rem' }} />
-        <input type="number" min="0" step="any" value={maxPoints} onChange={(e) => setMaxPoints(e.target.value)} placeholder={t('assignmentMaxPointsLabel')} required style={{ width: 90, padding: '6px 10px', border: '1px solid var(--v2-border-strong)', borderRadius: 8, fontSize: '.85rem' }} />
-        <button type="submit" className="v2-btn v2-btn-secondary" style={{ padding: '6px 12px', fontSize: '.8rem' }}>{t('addAssignment')}</button>
+      <form onSubmit={handleAddAssignment} className="v2-control-row" style={{ gap: 8, marginTop: 10 }}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('assignmentNameLabel')} aria-label={t('assignmentNameLabel')} required style={{ flex: '1 1 160px' }} />
+        <input type="number" min="0" step="any" value={maxPoints} onChange={(e) => setMaxPoints(e.target.value)} placeholder={t('assignmentMaxPointsLabel')} aria-label={t('assignmentMaxPointsLabel')} required style={{ width: 110 }} />
+        <button type="submit" className="v2-btn-sm v2-btn-outline">{t('addAssignment')}</button>
       </form>
     </div>
   )

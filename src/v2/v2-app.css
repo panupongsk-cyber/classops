@@ -1,5 +1,14 @@
 /* v2 app shell + Milestone 1 screens. Extends v2-auth.css's real, already-shipped tokens
    (indigo #4f46e5, Prompt font, slate ink) rather than inventing a new palette. */
+/* Prompt is loaded in index.html; this is the one place it is applied. Latin and Thai share it,
+   with Thai-capable system fonts as the fallback. */
+.v2-app, .v2-auth-page {
+  font-family: 'Prompt', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, system-ui, sans-serif;
+}
+.v2-app *, .v2-app *::before, .v2-app *::after,
+.v2-auth-page *, .v2-auth-page *::before, .v2-auth-page *::after { box-sizing: border-box; }
+.v2-app :where(button, input, select, textarea) { font-family: inherit; }
+
 .v2-app {
   --v2-primary: #4f46e5;
   --v2-primary-dark: #4338ca;
@@ -83,7 +92,8 @@
 }
 .v2-subtext { color: var(--v2-ink-muted); font-size: .85rem; margin: 0 0 20px; }
 
-.v2-field { margin-bottom: 20px; }
+.v2-field { display: block; margin-bottom: 20px; }
+.v2-field > span:first-child { display: block; font-size: .85rem; font-weight: 500; color: var(--v2-ink); margin-bottom: 6px; }
 .v2-field label { display: block; font-size: .85rem; font-weight: 500; color: var(--v2-ink); margin-bottom: 6px; }
 .v2-field input, .v2-field select {
   width: 100%; padding: 11px 14px; border: 1px solid var(--v2-border-strong); border-radius: 10px;
@@ -143,10 +153,34 @@
 .v2-notice-info { background: #eff6ff; color: #1e40af; }
 .v2-notice-error { background: var(--v2-error-bg); color: var(--v2-error-fg); }
 
+/* Phone layout (PS-TASK-20260925-762): the side nav becomes a horizontally scrolling tab strip
+   under the top bar instead of disappearing, so a phone can still reach every Section page. */
 @media (max-width: 640px) {
-  .v2-sidenav { display: none; }
+  .v2-body { flex-direction: column; }
+  .v2-sidenav {
+    width: auto; display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px;
+    border-right: 0; border-bottom: 1px solid var(--v2-border); scrollbar-width: none;
+  }
+  .v2-sidenav::-webkit-scrollbar { display: none; }
+  .v2-navitem { flex: 0 0 auto; white-space: nowrap; margin: 0; padding: 8px 12px; }
+  .v2-navhint, .v2-nav-group-header { display: none; }
+  .v2-nav-group { display: contents; }
   .v2-content { padding: 20px 16px; }
+  .v2-topbar { padding: 0 16px; }
   .v2-section-switcher { display: none; }
+  /* Wide tables scroll inside their own box rather than squeezing every column. */
+  .v2-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .v2-table th, .v2-table td { padding: 10px 14px; white-space: nowrap; }
+  .v2-joincode-card { flex-wrap: wrap; }
+  /* Tap targets: at least 40px tall for anything a thumb presses. min-height still applies when
+     a component sets its own inline padding. */
+  .v2-navitem, .v2-btn, .v2-btn-sm { min-height: 40px; }
+  .v2-btn, .v2-btn-sm { align-items: center; }
+  .v2-lang-toggle button { min-height: 36px; min-width: 40px; }
+  .v2-avatar { width: 40px; height: 40px; }
+  .v2-content :where(td a, a.v2-subtext, .v2-link-action) {
+    display: inline-flex; align-items: center; min-height: 40px;
+  }
 }
 
 /* Admin Console & Stat Cards */
@@ -282,3 +316,37 @@
 .v2-tag-block { margin-top: 12px; }
 .v2-matrix-row { border-top: 1px solid var(--v2-border, #e5e7eb); padding-top: 10px; margin-top: 10px; }
 .v2-matrix-row > .v2-row-label { font-weight: 600; margin-bottom: 6px; }
+
+/* Form-control baseline (PS-TASK-20260925-762). `:where()` keeps it at zero specificity, so any
+   component rule (.v2-field input, .v2-invite-row select, ...) still wins over it. Controls stay
+   native elements; only their look changes. */
+.v2-content :where(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea) {
+  max-width: 100%; min-width: 0; min-height: 40px; padding: 8px 12px; border: 1px solid var(--v2-border-strong);
+  border-radius: 10px; background-color: #fff; color: var(--v2-ink); font-size: .9rem; line-height: 1.4;
+}
+.v2-content :where(textarea) { width: 100%; resize: vertical; }
+.v2-content :where(input, select, textarea):focus-visible {
+  outline: 2px solid var(--v2-primary); outline-offset: 1px; border-color: var(--v2-primary);
+}
+.v2-app select {
+  appearance: none; -webkit-appearance: none; padding-right: 34px; background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2364748b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; cursor: pointer;
+}
+.v2-app select:disabled { opacity: .6; cursor: not-allowed; }
+.v2-btn, .v2-btn-sm { white-space: nowrap; justify-content: center; }
+.v2-btn:focus-visible, .v2-btn-sm:focus-visible { outline: 2px solid var(--v2-primary); outline-offset: 2px; }
+.v2-btn-secondary:hover:not(:disabled) { background: var(--v2-bg); }
+.v2-btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
+
+/* A labelled control on one line: "<label> <control>" with a consistent gap. */
+.v2-inline-field { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--v2-ink-muted); flex-wrap: wrap; }
+.v2-control-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* File chooser: a native <input type=file>, visually hidden but focusable, behind a localized
+   button and file-name label (browsers render their own English "Choose File" otherwise). */
+.v2-file { position: relative; display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; cursor: pointer; }
+.v2-file input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+.v2-file:focus-within .v2-btn-sm { outline: 2px solid var(--v2-primary); outline-offset: 2px; }
+.v2-file.is-disabled { opacity: .55; cursor: not-allowed; }
+.v2-file-name { font-size: .85rem; color: var(--v2-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

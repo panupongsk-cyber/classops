@@ -121,7 +121,7 @@ export default function AdminLiveSessionsPage() {
       )}
 
       {!loading && !error && (sessions || []).length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(360px, 100%), 1fr))', gap: 20 }}>
           {sessions.map((s) => {
             const pct = s.totalStudentsCount > 0
               ? Math.min(100, Math.round((s.checkedInCount / s.totalStudentsCount) * 100))
@@ -215,7 +215,7 @@ export default function AdminLiveSessionsPage() {
                 </div>
 
                 {/* Card Actions */}
-                <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid var(--v2-border)' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 12, borderTop: '1px solid var(--v2-border)' }}>
                   <Link
                     to={`/v2/sections/${s.sectionId}/attendance/live/${s.id}`}
                     className="v2-btn v2-btn-sm v2-btn-secondary"

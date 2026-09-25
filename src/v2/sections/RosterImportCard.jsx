@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../auth/api.js'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import { applyRosterImport, cancelRosterPending, listRosterPending, previewRosterImport } from './api.js'
+import FileInput from '../components/FileInput.jsx'
 
 const STATUSES = ['enroll', 'update', 'unchanged', 'pending', 'invalid', 'duplicate', 'other_section', 'staff']
 const WRITES = new Set(['enroll', 'update', 'pending'])
@@ -160,8 +161,8 @@ export default function RosterImportCard({ sectionId, onImported }) {
       <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('rosterImportHeading')}</div>
       <p className="v2-field-hint" style={{ marginTop: 0 }}>{t('rosterImportHint')}</p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input type="file" accept=".csv,text/csv" onChange={chooseFile} disabled={state === 'loading' || state === 'applying'} aria-label={t('rosterImportChoose')} />
-        <label className="v2-subtext" style={{ margin: 0 }}>
+        <FileInput accept=".csv,text/csv" onChange={chooseFile} disabled={state === 'loading' || state === 'applying'} label={t('rosterImportChoose')} fileName={file?.name ?? ''} />
+        <label className="v2-inline-field">
           {t('rosterEncodingLabel')}{' '}
           <select
             value={encoding}
@@ -176,7 +177,7 @@ export default function RosterImportCard({ sectionId, onImported }) {
           </select>
         </label>
         {preview && !preview.needsMapping && preview.fileSections.length > 1 && (
-          <label className="v2-subtext" style={{ margin: 0 }}>
+          <label className="v2-inline-field">
             {t('rosterSectionLabel')}{' '}
             <select
               value={section ?? ''}

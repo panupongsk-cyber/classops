@@ -95,22 +95,23 @@ export default function PracticePage() {
               {categories.map((c) => <option key={c.name} value={c.name}>{c.field} · {c.name}</option>)}
             </select>
           </label>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {hasThai && (
+            <label className="v2-inline-field" style={{ marginBottom: 14 }}>
+              {t('practiceQuestionLanguage')}
+              <select value={qLang} onChange={(e) => setQLang(e.target.value)}>
+                <option value="en">English</option>
+                <option value="th">ไทย</option>
+              </select>
+            </label>
+          )}
+          <div className="v2-control-row">
             <button type="button" className="v2-btn v2-btn-primary" disabled={examId === 'all'} onClick={() => start('practice')}>{t('practiceStartPractice')}</button>
-            <span className="v2-subtext">
-              <button type="button" className="v2-btn v2-btn-secondary" onClick={() => start('quiz')}>{t('practiceStartQuiz')}</button>{' '}
-              <input type="number" min="1" max="100" value={count} onChange={(e) => setCount(e.target.value)} style={{ width: 64 }} aria-label={t('practiceQuizCount')} /> {t('practiceQuestionsUnit')}
+            <span className="v2-control-row" style={{ gap: 8 }}>
+              <button type="button" className="v2-btn v2-btn-secondary" onClick={() => start('quiz')}>{t('practiceStartQuiz')}</button>
+              <input type="number" min="1" max="100" value={count} onChange={(e) => setCount(e.target.value)} style={{ width: 72 }} aria-label={t('practiceQuizCount')} />
+              <span className="v2-inline-field">{t('practiceQuestionsUnit')}</span>
             </span>
             <button type="button" className="v2-btn v2-btn-secondary" disabled={examId === 'all'} onClick={() => loadBrowse(0)}>{t('practiceBrowse')}</button>
-            {hasThai && (
-              <label className="v2-subtext" style={{ margin: 0 }}>
-                {t('practiceQuestionLanguage')}{' '}
-                <select value={qLang} onChange={(e) => setQLang(e.target.value)}>
-                  <option value="en">English</option>
-                  <option value="th">ไทย</option>
-                </select>
-              </label>
-            )}
           </div>
           {error && <p className="v2-field-error">{error}</p>}
           {exam && (

@@ -47,12 +47,12 @@ export default function AdminOverviewPage() {
             {t('adminOverviewSubtitle')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Link to="/v2/admin/users" className="v2-btn v2-btn-secondary">
             {t('adminUsersCta')}
           </Link>
           <Link to="/v2/courses/new" className="v2-btn v2-btn-primary">
-            + {t('createCourseCta')}
+            {t('newCourseCta')}
           </Link>
         </div>
       </div>
