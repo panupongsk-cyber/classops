@@ -16,10 +16,17 @@ active one):
 | `aa53107` | 2026-09-25 | Admin Console, and learning activities with migration `011_learning_activities.sql`. The 14 learning-activity packages were imported. Evidence is on PersonalSchema Issue #693. |
 | `76de503` | 2026-09-25 | Wave 1 (PS-TASK-20260925-727): real client addresses for rate limits, staff-only member emails, the Admin → Live sessions fix, and owner choice for admins. No migration. Evidence is on #727. |
 | `e0f50a0` | 2026-09-25 | Wave 2 (PS-TASK-20260925-734): the `mean` evidence policy, teacher-triggered gradebook sync, and attempt verification, with migration `013_activity_gradebook_sync.sql`. Evidence is on #734. |
+| `efe0f12` | 2026-09-25 | Roster import from any student-list CSV, TIS-620 aware, with column mapping and pre-enrollment claimed at sign-in (PS-TASK-20260925-744, -747), with migration `014_section_roster.sql`. Evidence is on #744. |
+| `03e97a1` | 2026-09-25 | ITPEC IT Passport exam practice, opt-in per Section (PS-TASK-20260925-751, -755), with migration `012_practice.sql`. The 9 sessions (900 questions) were imported. Evidence is on #751 and #755. |
 
-`e0f50a0` is the active release, and `76de503` is its rollback target. A code-only rollback
-leaves migration 013 applied. That is harmless, but an activity set to `mean` would behave as
-`best` until its policy is set again.
+`03e97a1` is the active release, and `efe0f12` is its rollback target. A code-only rollback
+leaves migrations 012–014 and the imported content in place, and the older code ignores the
+tables it doesn't know.
+- If you roll back past `e0f50a0`, an activity set to `mean` behaves as `best` until its policy
+  is set again.
+- Importing practice content works like the activity packages:
+  `node dist/scripts/import-practice.js /packages/<session>.json`, with packages from the item
+  bank's `tools/export_practice.py`.
 
 **What the browser UI offers.** Google sign-in, plus these features:
 
@@ -33,6 +40,8 @@ leaves migration 013 applied. That is harmless, but an activity set to `mean` wo
   - the manager's evidence view with a CSV download
   - gradebook sync with a preview
   - attempt verification
+- roster import from a student-list CSV, with pending pre-enrollment
+- ITPEC IT Passport exam practice, which a teacher enables per Section
 - the Admin Console
 
 **Limits that still apply.** The three deferred items below were issues in the archived `ps-work`

@@ -141,13 +141,13 @@ function PostCard({ post, isManager, onLike, onDelete, t, currentUserId }) {
       <p style={{ margin: '0 0 8px', fontSize: '.92rem', whiteSpace: 'pre-wrap' }}>{post.body}</p>
       {post.link_url && <a href={post.link_url} target="_blank" rel="noreferrer" style={{ fontSize: '.85rem', display: 'block', marginBottom: 10 }}>{post.link_url}</a>}
       <div style={{ display: 'flex', gap: 16, fontSize: '.82rem', color: 'var(--v2-ink-muted)' }}>
-        <button type="button" onClick={onLike} style={{ background: 'none', border: 0, cursor: 'pointer', color: post.liked_by_me ? 'var(--v2-primary)' : 'var(--v2-ink-muted)', fontWeight: post.liked_by_me ? 600 : 400, padding: 0 }}>
+        <button type="button" className="v2-link-action" onClick={onLike} style={{ background: 'none', border: 0, cursor: 'pointer', color: post.liked_by_me ? 'var(--v2-primary)' : 'var(--v2-ink-muted)', fontWeight: post.liked_by_me ? 600 : 400, padding: 0 }}>
           {post.liked_by_me ? t('unlikeCta') : t('likeCta')} ({post.like_count})
         </button>
-        <button type="button" onClick={toggleComments} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--v2-ink-muted)', padding: 0 }}>
+        <button type="button" className="v2-link-action" onClick={toggleComments} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--v2-ink-muted)', padding: 0 }}>
           {t('commentsCta')} ({post.comment_count})
         </button>
-        {isManager && <button type="button" onClick={onDelete} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--v2-error-fg)', padding: 0, marginLeft: 'auto' }}>{t('remove')}</button>}
+        {isManager && <button type="button" className="v2-link-action" onClick={onDelete} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--v2-error-fg)', padding: 0, marginLeft: 'auto' }}>{t('remove')}</button>}
       </div>
 
       {showComments && (

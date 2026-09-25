@@ -63,12 +63,12 @@ export default function SectionsPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <h1 className="v2-h1" style={{ margin: 0 }}>{t('mySectionsTitle')}</h1>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {user?.isPlatformAdmin && (
             <Link to="/v2/courses/new" className="v2-btn v2-btn-primary">
-              + {t('createCourseCta')}
+              {t('newCourseCta')}
             </Link>
           )}
           <button type="button" className="v2-btn v2-btn-secondary" onClick={() => setShowJoinModal(true)}>{t('joinWithCodeCta')}</button>
