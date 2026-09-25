@@ -12,11 +12,13 @@ import { z } from "zod";
 import {
   ActivityAnswerError,
   aggregate,
+  BAND_EPSILON,
   correctAnswer,
   itemFeedback,
   listItems,
   localize,
   newSeed,
+  packageHash,
   projectItem,
   projectStage,
   SCORER_VERSION,
@@ -40,9 +42,16 @@ const createSchema = z.object({
   opensAt: isoDate.nullable().optional(),
   dueAt: isoDate.nullable().optional(),
   maxAttempts: z.number().int().positive().nullable().optional(),
-  evidencePolicy: z.enum(["first", "best", "last"]).optional(),
+  evidencePolicy: z.enum(["first", "best", "last", "mean"]).optional(),
 });
-const updateSchema = createSchema.omit({ packageId: true });
+const updateSchema = createSchema.omit({ packageId: true }).extend({
+  // The gradebook assignment a teacher-triggered sync writes to (same Section), or null to unlink.
+  assignmentId: z.uuid().nullable().optional(),
+});
+const syncSchema = z.object({
+  // Learners whose hand-edited cell the teacher explicitly chose to overwrite (preview status "manual").
+  overwriteUserIds: z.array(z.uuid()).max(2000).default([]),
+});
 const startSchema = z.object({ lang: langSchema.optional() });
 const responseSchema = z.object({
   itemKey: z.string().min(1).max(64),
@@ -69,7 +78,8 @@ interface SectionActivityRow {
   opens_at: Date | null;
   due_at: Date | null;
   max_attempts: number | null;
-  evidence_policy: "first" | "best" | "last";
+  evidence_policy: EvidencePolicy;
+  assignment_id: string | null;
   created_at: Date;
   updated_at: Date;
   slug: string;
@@ -92,10 +102,11 @@ interface AttemptRow {
   score_ratio: string | null;
   band_index: number | null;
   stage_results: Record<string, number> | null;
+  scorer_version: string;
 }
 
 const ACTIVITY_COLUMNS = `activity.id, activity.section_id, activity.package_id, activity.status,
-  activity.opens_at, activity.due_at, activity.max_attempts, activity.evidence_policy,
+  activity.opens_at, activity.due_at, activity.max_attempts, activity.evidence_policy, activity.assignment_id,
   activity.created_at, activity.updated_at, package.slug, package.version, package.title,
   package.languages`;
 
@@ -113,6 +124,7 @@ function publicActivity(row: SectionActivityRow) {
     dueAt: row.due_at,
     maxAttempts: row.max_attempts,
     evidencePolicy: row.evidence_policy,
+    assignmentId: row.assignment_id,
     availableNow: isAvailable(row),
   };
 }
@@ -148,12 +160,46 @@ function bandView(pkg: ActivityPackage, index: number, lang: Lang) {
   };
 }
 
-/** Pick the evidence attempt among finished attempts (ordered by attempt_no). */
-function pickEvidence(finished: AttemptRow[], policy: "first" | "best" | "last") {
+type EvidencePolicy = "first" | "best" | "last" | "mean";
+
+/** Pick one attempt among finished attempts (ordered by attempt_no). */
+function pickAttempt(finished: AttemptRow[], policy: "first" | "best" | "last") {
   if (finished.length === 0) return null;
   if (policy === "first") return finished[0] ?? null;
   if (policy === "last") return finished[finished.length - 1] ?? null;
   return finished.reduce((best, a) => (Number(a.score_ratio) > Number(best.score_ratio) ? a : best));
+}
+
+/** The band a score falls in, by the same rule as the engine's aggregate(). */
+function bandIndexFor(pkg: ActivityPackage, scoreRatio: number) {
+  const index = pkg.bands.findIndex((b) => scoreRatio * 100 + BAND_EPSILON >= b.min_percent);
+  return index === -1 ? null : index;
+}
+
+/**
+ * The evidence score under the activity's policy, or null with no finished attempt. `first`,
+ * `best`, and `last` count one attempt (attemptId set); `mean` averages every finished attempt
+ * (attemptId null, attemptCount the number averaged).
+ */
+function evidenceOf(pkg: ActivityPackage, finished: AttemptRow[], policy: EvidencePolicy) {
+  if (finished.length === 0) return null;
+  if (policy === "mean") {
+    const scoreRatio = finished.reduce((sum, a) => sum + Number(a.score_ratio), 0) / finished.length;
+    return { policy, scoreRatio, bandIndex: bandIndexFor(pkg, scoreRatio), attemptId: null, attemptCount: finished.length };
+  }
+  const chosen = pickAttempt(finished, policy) as AttemptRow;
+  return {
+    policy,
+    scoreRatio: Number(chosen.score_ratio),
+    bandIndex: chosen.band_index,
+    attemptId: chosen.id,
+    attemptCount: 1,
+  };
+}
+
+/** Gradebook points for a ratio: two decimals, as a teacher would type them. */
+function pointsFor(scoreRatio: number, maxPoints: number) {
+  return Math.round(scoreRatio * maxPoints * 100) / 100;
 }
 
 export async function registerActivityRoutes(
@@ -367,12 +413,22 @@ export async function registerActivityRoutes(
     const parsed = updateSchema.safeParse(request.body);
     if (!parsed.success) return validationError(reply, parsed.error);
     const body = parsed.data;
+    if (body.assignmentId) {
+      const sameSection = await pool.query(
+        `SELECT 1 FROM assignments AS assignment
+         JOIN categories AS category ON category.id = assignment.category_id
+         WHERE assignment.id = $1 AND category.section_id = $2`,
+        [body.assignmentId, activity.section_id],
+      );
+      if (!sameSection.rowCount) return reply.code(400).send({ error: "ASSIGNMENT_NOT_IN_SECTION" });
+    }
     const opensAt = body.opensAt === undefined ? activity.opens_at : body.opensAt === null ? null : new Date(body.opensAt);
     const dueAt = body.dueAt === undefined ? activity.due_at : body.dueAt === null ? null : new Date(body.dueAt);
     if (opensAt && dueAt && dueAt <= opensAt) return reply.code(400).send({ error: "INVALID_SCHEDULE" });
     await pool.query(
       `UPDATE section_activities
-       SET status = $2, opens_at = $3, due_at = $4, max_attempts = $5, evidence_policy = $6, updated_at = now()
+       SET status = $2, opens_at = $3, due_at = $4, max_attempts = $5, evidence_policy = $6,
+           assignment_id = $7, updated_at = now()
        WHERE id = $1`,
       [
         activityId,
@@ -381,6 +437,7 @@ export async function registerActivityRoutes(
         dueAt,
         body.maxAttempts === undefined ? activity.max_attempts : body.maxAttempts,
         body.evidencePolicy ?? activity.evidence_policy,
+        body.assignmentId === undefined ? activity.assignment_id : body.assignmentId,
       ],
     );
     const row = await loadActivity(activityId);
@@ -559,6 +616,7 @@ export async function registerActivityRoutes(
     if (attempt.status === "finished") {
       const items = listItems(pkg);
       body.result = resultView(pkg, attempt, responses.length, items.length);
+      if (!isOwner) body.verification = await verifyAttempt(attempt, pkg);
       if (isOwner && pkg.reveal !== "none") {
         body.review = items
           .filter(({ item }) => responses.some((r) => r.item_key === item.key))
@@ -572,7 +630,59 @@ export async function registerActivityRoutes(
     return reply.send(body);
   });
 
-  async function evidence(activity: SectionActivityRow) {
+  /**
+   * Staff-facing proof of a finished attempt: who it belongs to, the exact package and scorer that
+   * produced it, and a fresh re-score of the stored answers with the current engine. `matches` is
+   * true when the re-score reproduces every stored item ratio and the stored total.
+   */
+  async function verifyAttempt(attempt: AttemptRow, pkg: ActivityPackage) {
+    const learner = await pool.query<{ display_name: string; student_id: string | null; content_hash: string; slug: string; version: number }>(
+      `SELECT app_user.display_name, membership.student_id, package.content_hash, package.slug, package.version
+       FROM activity_attempts AS attempt
+       JOIN users AS app_user ON app_user.id = attempt.user_id
+       JOIN section_activities AS activity ON activity.id = attempt.section_activity_id
+       JOIN activity_packages AS package ON package.id = attempt.package_id
+       LEFT JOIN memberships AS membership ON membership.user_id = attempt.user_id AND membership.section_id = activity.section_id
+       WHERE attempt.id = $1`,
+      [attempt.id],
+    );
+    const info = learner.rows[0];
+    const stored = await pool.query<{ item_key: string; answer: unknown; ratio: string }>(
+      "SELECT item_key, answer, ratio FROM activity_responses WHERE attempt_id = $1",
+      [attempt.id],
+    );
+    let itemsMatch = true;
+    const rescoredRatios: Record<string, number> = {};
+    for (const row of stored.rows) {
+      let ratio: number;
+      try {
+        ratio = scoreItem(pkg, row.item_key, row.answer, attempt.shuffle_seed).ratio;
+      } catch {
+        itemsMatch = false;
+        continue;
+      }
+      rescoredRatios[row.item_key] = ratio;
+      if (Math.abs(ratio - Number(row.ratio)) > 1e-9) itemsMatch = false;
+    }
+    const rescored = aggregate(pkg, rescoredRatios);
+    const storedRatio = Number(attempt.score_ratio);
+    return {
+      learner: { displayName: info?.display_name ?? null, studentId: info?.student_id ?? null },
+      package: {
+        slug: info?.slug ?? null,
+        version: info?.version ?? null,
+        contentHash: info?.content_hash ?? null,
+        specHashMatches: info ? packageHash(pkg) === info.content_hash : false,
+      },
+      scorerVersion: attempt.scorer_version,
+      currentScorerVersion: SCORER_VERSION,
+      storedScoreRatio: storedRatio,
+      rescoredScoreRatio: rescored.score_ratio,
+      matches: itemsMatch && Math.abs(rescored.score_ratio - storedRatio) < 1e-9,
+    };
+  }
+
+  async function evidence(activity: SectionActivityRow, pkg: ActivityPackage) {
     const students = await pool.query<{
       user_id: string;
       display_name: string;
@@ -593,7 +703,7 @@ export async function registerActivityRoutes(
     return students.rows.map((s) => {
       const mine = attempts.rows.filter((a) => a.user_id === s.user_id);
       const finished = mine.filter((a) => a.status === "finished");
-      const best = pickEvidence(finished, "best");
+      const best = pickAttempt(finished, "best");
       return {
         userId: s.user_id,
         displayName: s.display_name,
@@ -604,10 +714,8 @@ export async function registerActivityRoutes(
         first: finished[0] ? attemptSummary(finished[0]) : null,
         best: best ? attemptSummary(best) : null,
         last: finished.length ? attemptSummary(finished[finished.length - 1] as AttemptRow) : null,
-        evidence: (() => {
-          const chosen = pickEvidence(finished, activity.evidence_policy);
-          return chosen ? attemptSummary(chosen) : null;
-        })(),
+        // { policy, scoreRatio, bandIndex, attemptId (null for mean), attemptCount } or null.
+        evidence: evidenceOf(pkg, finished, activity.evidence_policy),
       };
     });
   }
@@ -635,7 +743,8 @@ export async function registerActivityRoutes(
   app.get("/api/section-activities/:activityId/evidence", async (request, reply) => {
     const activity = await authorizeEvidence(request, reply);
     if (!activity) return;
-    return reply.send({ activity: publicActivity(activity), students: await evidence(activity) });
+    const pkg = await loadSpec(activity.package_id);
+    return reply.send({ activity: publicActivity(activity), students: await evidence(activity, pkg) });
   });
 
   app.get("/api/section-activities/:activityId/evidence/export", async (request, reply) => {
@@ -656,9 +765,10 @@ export async function registerActivityRoutes(
       "Best Score %",
       "Last Score %",
       `Evidence Score % (${activity.evidence_policy})`,
+      "Evidence Attempts Counted",
       "Evidence Band",
     ];
-    const rows = (await evidence(activity)).map((s) => [
+    const rows = (await evidence(activity, pkg)).map((s) => [
       s.displayName,
       s.email,
       s.studentId ?? "",
@@ -668,11 +778,133 @@ export async function registerActivityRoutes(
       pct(s.best),
       pct(s.last),
       pct(s.evidence),
+      s.evidence ? s.evidence.attemptCount : "",
       s.evidence && s.evidence.bandIndex !== null ? (bandView(pkg, s.evidence.bandIndex, lang)?.title ?? "") : "",
     ]);
     return reply
       .type("text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="${activity.slug}-evidence.csv"`)
       .send(toCsv([header, ...rows]));
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // Teacher-triggered gradebook sync (Phase 2). The preview and the apply share one computation
+  // and the same rules, but the apply recomputes at confirm time: a learner who finishes an attempt
+  // between preview and confirm is written with the fresh value. Per learner:
+  //   no_attempt  no finished attempt: the cell is left alone (never zeroed, never deleted)
+  //   new         no score yet: written
+  //   unchanged   the cell already holds the policy's points: nothing to write
+  //   changed     the cell still holds exactly what this activity last synced: rewritten
+  //   manual      any other value (typed by hand, edited after a sync, or written by another
+  //               activity): kept unless the teacher lists the learner in overwriteUserIds
+  // ---------------------------------------------------------------------------------------------
+
+  type SyncStatus = "no_attempt" | "new" | "unchanged" | "changed" | "manual";
+
+  async function syncPlan(activity: SectionActivityRow, db: DatabasePool | DatabaseClient = pool) {
+    if (!activity.assignment_id) return null;
+    const assignment = await db.query<{ id: string; name: string; max_points: string }>(
+      "SELECT id, name, max_points FROM assignments WHERE id = $1",
+      [activity.assignment_id],
+    );
+    const target = assignment.rows[0];
+    if (!target) return null;
+    const maxPoints = Number(target.max_points);
+    const pkg = await loadSpec(activity.package_id);
+    const students = await evidence(activity, pkg);
+    const scores = await db.query<{
+      user_id: string;
+      points_earned: string;
+      synced_from_activity_id: string | null;
+      synced_points: string | null;
+    }>(
+      "SELECT user_id, points_earned, synced_from_activity_id, synced_points FROM scores WHERE assignment_id = $1",
+      [target.id],
+    );
+    const byUser = new Map(scores.rows.map((row) => [row.user_id, row]));
+    const same = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+    const rows = students.map((s) => {
+      const current = byUser.get(s.userId);
+      const currentPoints = current ? Number(current.points_earned) : null;
+      const newPoints = s.evidence ? pointsFor(s.evidence.scoreRatio, maxPoints) : null;
+      let status: SyncStatus;
+      if (newPoints === null) status = "no_attempt";
+      else if (!current || currentPoints === null) status = "new";
+      else if (same(currentPoints, newPoints)) status = "unchanged";
+      else if (
+        current.synced_from_activity_id === activity.id &&
+        current.synced_points !== null &&
+        same(currentPoints, Number(current.synced_points))
+      ) status = "changed";
+      else status = "manual";
+      return {
+        userId: s.userId,
+        displayName: s.displayName,
+        email: s.email,
+        studentId: s.studentId,
+        evidence: s.evidence,
+        currentPoints,
+        newPoints,
+        status,
+      };
+    });
+    return { assignment: { id: target.id, name: target.name, maxPoints }, policy: activity.evidence_policy, rows };
+  }
+
+  app.get("/api/section-activities/:activityId/gradebook-sync", async (request, reply) => {
+    const activity = await authorizeEvidence(request, reply);
+    if (!activity) return;
+    const plan = await syncPlan(activity);
+    if (!plan) return reply.code(409).send({ error: "NO_LINKED_ASSIGNMENT" });
+    return reply.send(plan);
+  });
+
+  app.post("/api/section-activities/:activityId/gradebook-sync", async (request, reply) => {
+    const activity = await authorizeEvidence(request, reply);
+    if (!activity) return;
+    const parsed = syncSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return validationError(reply, parsed.error);
+    const user = await requireCurrentUser(request, reply, pool, config);
+    if (!user) return;
+    const overwrite = new Set(parsed.data.overwriteUserIds);
+    const outcome = await withTransaction(pool, async (client) => {
+      const plan = await syncPlan(activity, client);
+      if (!plan) return null;
+      const written: { userId: string; status: SyncStatus; points: number }[] = [];
+      for (const row of plan.rows) {
+        const write = row.status === "new" || row.status === "changed" || (row.status === "manual" && overwrite.has(row.userId));
+        if (!write || row.newPoints === null) continue;
+        await client.query(
+          `INSERT INTO scores (assignment_id, user_id, points_earned, synced_from_activity_id, synced_points, synced_at)
+           VALUES ($1, $2, $3, $4, $3, now())
+           ON CONFLICT (assignment_id, user_id) DO UPDATE
+           SET points_earned = EXCLUDED.points_earned, synced_from_activity_id = EXCLUDED.synced_from_activity_id,
+               synced_points = EXCLUDED.synced_points, synced_at = now(), updated_at = now()`,
+          [plan.assignment.id, row.userId, row.newPoints, activity.id],
+        );
+        written.push({ userId: row.userId, status: row.status, points: row.newPoints });
+      }
+      const counts = Object.fromEntries(
+        (["new", "changed", "unchanged", "manual", "no_attempt"] as const).map((k) => [k, plan.rows.filter((r) => r.status === k).length]),
+      );
+      await client.query(
+        `INSERT INTO audit_log (actor_user_id, event_type, subject_type, subject_id, metadata)
+         VALUES ($1, 'activity.gradebook_synced', 'section_activity', $2, $3::jsonb)`,
+        [
+          user.id,
+          activity.id,
+          JSON.stringify({
+            assignmentId: plan.assignment.id,
+            policy: plan.policy,
+            counts,
+            written: written.length,
+            overwrittenManual: written.filter((w) => w.status === "manual").map((w) => w.userId),
+          }),
+        ],
+      );
+      return { assignment: plan.assignment, policy: plan.policy, counts, written };
+    });
+    if (!outcome) return reply.code(409).send({ error: "NO_LINKED_ASSIGNMENT" });
+    return reply.send(outcome);
   });
 }

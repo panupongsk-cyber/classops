@@ -4,6 +4,7 @@ import { ApiError } from '../auth/api.js'
 import { useV2Auth } from '../auth/V2AuthContext.jsx'
 import { EmptyState, ForbiddenState, LoadingRows, RetryableError } from '../components/StateViews.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
+import { listAssignments } from '../gradebook/api.js'
 import { listMemberships } from '../sections/api.js'
 import { attachActivity, listActivities, listPackages, localized, percent, updateActivity } from './api.js'
 import { activityErrorText } from './PlayerPage.jsx'
@@ -176,6 +177,16 @@ function ManagerControls({ sectionId, activity, onChanged }) {
   const { t } = useI18n()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [assignments, setAssignments] = useState(null)
+
+  // The gradebook assignments a teacher can link this activity to (same Section).
+  useEffect(() => {
+    let cancelled = false
+    listAssignments(sectionId)
+      .then((result) => { if (!cancelled) setAssignments(result.assignments) })
+      .catch(() => { if (!cancelled) setAssignments([]) })
+    return () => { cancelled = true }
+  }, [sectionId])
 
   async function change(payload) {
     setBusy(true)
@@ -203,6 +214,20 @@ function ManagerControls({ sectionId, activity, onChanged }) {
           <option value="first">{t('activityPolicyFirst')}</option>
           <option value="best">{t('activityPolicyBest')}</option>
           <option value="last">{t('activityPolicyLast')}</option>
+          <option value="mean">{t('activityPolicyMean')}</option>
+        </select>
+      </label>
+      <label className="v2-subtext" style={{ margin: 0 }}>
+        {t('activityGradebookLinkLabel')}{' '}
+        <select
+          value={activity.assignmentId ?? ''}
+          disabled={busy || assignments === null}
+          onChange={(e) => change({ assignmentId: e.target.value || null })}
+        >
+          <option value="">{t('activityGradebookNotLinked')}</option>
+          {(assignments ?? []).map((a) => (
+            <option key={a.id} value={a.id}>{a.name} ({Number(a.max_points)})</option>
+          ))}
         </select>
       </label>
       <Link className="v2-btn-sm v2-btn-outline" to={`/v2/sections/${sectionId}/activities/${activity.id}/evidence`}>{t('activityEvidenceCta')}</Link>

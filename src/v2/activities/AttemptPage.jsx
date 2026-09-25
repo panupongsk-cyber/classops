@@ -31,7 +31,7 @@ export default function AttemptPage() {
   if (status === 'forbidden') return <ForbiddenState />
   if (status === 'error') return <RetryableError onRetry={load} />
 
-  const { attempt, activity, result, review } = data
+  const { attempt, activity, result, review, verification } = data
   const answeredCount = data.responses.length
 
   return (
@@ -67,6 +67,24 @@ export default function AttemptPage() {
         </div>
       ) : (
         <div className="v2-notice v2-notice-info">{t('activityNotFinished', { done: answeredCount })}</div>
+      )}
+
+      {verification && (
+        <div className="v2-card" style={{ marginBottom: 20 }}>
+          <h2 className="v2-h1" style={{ fontSize: '1.05rem' }}>{t('activityVerifyHeading')}</h2>
+          <div className={`v2-notice ${verification.matches ? 'v2-notice-info' : 'v2-notice-error'}`}>
+            {verification.matches ? t('activityVerifyMatches') : t('activityVerifyMismatch')}
+          </div>
+          <table className="v2-table">
+            <tbody>
+              <tr><td>{t('activityColLearner')}</td><td>{verification.learner.displayName}{verification.learner.studentId ? ` · ${verification.learner.studentId}` : ''}</td></tr>
+              <tr><td>{t('activityVerifyAttemptId')}</td><td><code>{attempt.id}</code></td></tr>
+              <tr><td>{t('activityVerifyPackage')}</td><td>{verification.package.slug} v{verification.package.version} · <code>{String(verification.package.contentHash).slice(0, 12)}</code></td></tr>
+              <tr><td>{t('activityVerifyScorer')}</td><td>{verification.scorerVersion}</td></tr>
+              <tr><td>{t('activityVerifyScores')}</td><td>{percent(verification.storedScoreRatio)} / {percent(verification.rescoredScoreRatio)}</td></tr>
+            </tbody>
+          </table>
+        </div>
       )}
 
       {review && review.length > 0 && (
