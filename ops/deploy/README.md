@@ -14,8 +14,12 @@ active one):
 | `239a893` | 2026-09-11 | First production pilot: Google sign-in, logout, and an account page |
 | `065108f` | 2026-09-17 | v2 as the sole client (panupongsk-cyber/classops#10) |
 | `aa53107` | 2026-09-25 | Admin Console, and learning activities with migration `011_learning_activities.sql`. The 14 learning-activity packages were imported. Evidence is on PersonalSchema Issue #693. |
+| `76de503` | 2026-09-25 | Wave 1 (PS-TASK-20260925-727): real client addresses for rate limits, staff-only member emails, the Admin → Live sessions fix, and owner choice for admins. No migration. Evidence is on #727. |
+| `e0f50a0` | 2026-09-25 | Wave 2 (PS-TASK-20260925-734): the `mean` evidence policy, teacher-triggered gradebook sync, and attempt verification, with migration `013_activity_gradebook_sync.sql`. Evidence is on #734. |
 
-`aa53107` is the active release, and `065108f` is its rollback target.
+`e0f50a0` is the active release, and `76de503` is its rollback target. A code-only rollback
+leaves migration 013 applied. That is harmless, but an activity set to `mean` would behave as
+`best` until its policy is set again.
 
 **What the browser UI offers.** Google sign-in, plus these features:
 
@@ -24,8 +28,11 @@ active one):
 - the gradebook
 - the class feed
 - stats
-- learning activities: play, the learner's own results, and the manager's evidence view with a
-  CSV download
+- learning activities:
+  - play, and the learner's own results
+  - the manager's evidence view with a CSV download
+  - gradebook sync with a preview
+  - attempt verification
 - the Admin Console
 
 **Limits that still apply.** The three deferred items below were issues in the archived `ps-work`
@@ -34,8 +41,8 @@ repository means something else.
 
 - **Microsoft OAuth.** The code exists but is intentionally not configured. Its activation is
   deferred in `ps-work#712`. The 2026-09-25 deploy changed no OAuth configuration.
-- **Rate-limit buckets (`ps-work#721`, fixed in PS-TASK-20260925-727).** This takes effect with
-  the first release that contains that task.
+- **Rate-limit buckets (`ps-work#721`, fixed in PS-TASK-20260925-727).** This has been live since
+  release `76de503`.
   - The gateway resolves each client's own address, and the API sets
     `TRUST_PROXY=172.16.0.0/12`.
   - Signed-in traffic is keyed per user.

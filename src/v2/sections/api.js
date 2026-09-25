@@ -54,3 +54,21 @@ export function removeMember(sectionId, userId, roles) {
     body: JSON.stringify({ roles }),
   })
 }
+
+// Roster import (PS-TASK-20260925-744). The file travels as base64; the server decodes it
+// (UTF-8, or the registrar's TIS-620) and runs the same plan for preview and import.
+export function previewRosterImport(sectionId, payload) {
+  return apiRequest(`/api/sections/${sectionId}/roster-import/preview`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function applyRosterImport(sectionId, payload) {
+  return apiRequest(`/api/sections/${sectionId}/roster-import`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function listRosterPending(sectionId) {
+  return apiRequest(`/api/sections/${sectionId}/roster-pending`)
+}
+
+export function cancelRosterPending(sectionId, entryId) {
+  return apiRequest(`/api/sections/${sectionId}/roster-pending/${entryId}`, { method: 'DELETE' })
+}

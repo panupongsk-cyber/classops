@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
 import { getSectionRoles, hasAnyRole } from "../authz.js";
+import { claimRosterByStudentId } from "./roster.js";
 import type { AppConfig } from "../config.js";
 import { requireCurrentUser } from "../current-user.js";
 import type { DatabasePool } from "../db.js";
@@ -92,6 +93,16 @@ export async function registerSectionRoutes(
            updated_at = now()`,
       [user.id, sectionId, parsed.data.studentId ?? null],
     );
+    // A joiner whose student ID matches a pending roster row of this Section claims it (the
+    // personal-Gmail fallback); staff see the roster email differs from the account's.
+    // It runs after the membership exists, so a roster failure must not fail the join itself.
+    if (parsed.data.studentId) {
+      try {
+        await claimRosterByStudentId(pool, user.id, sectionId, parsed.data.studentId);
+      } catch (error) {
+        request.log.warn({ err: error, sectionId }, "roster claim by student ID failed");
+      }
+    }
     return reply.send({ sectionId, roles: ["student"] });
   });
 

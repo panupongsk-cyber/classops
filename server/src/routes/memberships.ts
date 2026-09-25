@@ -40,10 +40,17 @@ export async function registerMembershipRoutes(
     // Emails are staff-only. Other members still see the roster (names and roles: the student
     // home lists classmates by name), but `email` is null for every row except their own.
     const staff = user.isPlatformAdmin || canManageSessions(callerRoles);
+    // Staff also get the official roster record (PS-TASK-20260925-744): student ID, the registrar's
+    // names, and whether the roster email differs from the account's (a claim by student ID).
     const result = await pool.query(
       `SELECT app_user.id AS user_id,
               CASE WHEN $2 OR membership.user_id = $3 THEN app_user.email::text END AS email,
-              app_user.display_name, membership.roles
+              app_user.display_name, membership.roles,
+              CASE WHEN $2 THEN membership.student_id END AS student_id,
+              CASE WHEN $2 THEN membership.roster_name_th END AS roster_name_th,
+              CASE WHEN $2 THEN membership.roster_name_en END AS roster_name_en,
+              CASE WHEN $2 THEN (membership.roster_email IS NOT NULL AND membership.roster_email <> app_user.email) END
+                AS roster_email_mismatch
        FROM memberships AS membership
        JOIN users AS app_user ON app_user.id = membership.user_id
        WHERE membership.section_id = $1

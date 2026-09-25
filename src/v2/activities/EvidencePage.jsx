@@ -86,6 +86,7 @@ export default function EvidencePage() {
                   <td>
                     <div>{s.displayName}</div>
                     <div className="is-muted">{s.email}</div>
+                    {s.rosterEmailMismatch && <div className="v2-field-error" style={{ margin: 0 }}>{t('rosterEmailMismatch')}</div>}
                   </td>
                   <td>{s.studentId ?? <span className="is-muted">—</span>}</td>
                   <td>

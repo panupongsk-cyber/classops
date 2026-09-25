@@ -301,10 +301,10 @@ test("Learning activities: import, attach, play, score, evidence, and access con
     assert.equal(csv.statusCode, 200);
     assert.match(csv.headers["content-type"] as string, /text\/csv/);
     const lines = csv.body.split("\n");
-    assert.equal(lines[0], "Student Name,Student Email,Student ID,Attempts,First Finished At,First Score %,Best Score %,Last Score %,Evidence Score % (best),Evidence Attempts Counted,Evidence Band");
+    assert.equal(lines[0], "Student Name,Student Email,Student ID,Attempts,First Finished At,First Score %,Best Score %,Last Score %,Evidence Score % (best),Evidence Attempts Counted,Evidence Band,Roster Email Mismatch");
     const aliceLine = lines.find((l) => l.includes("alice@example.com")) ?? "";
     assert.ok(aliceLine.startsWith(`"'=HYPERLINK(""x"")"`), `formula-injection guard: ${aliceLine}`);
-    assert.match(aliceLine, /,65012345,2,[^,]+,62\.50,100\.00,100\.00,100\.00,1,High$/);
+    assert.match(aliceLine, /,65012345,2,[^,]+,62\.50,100\.00,100\.00,100\.00,1,High,$/);
     assert.equal((await app.inject({ method: "GET", url: `${evidenceUrl}/export`, headers: { cookie: alice.cookie } })).statusCode, 403);
 
     // A closed activity accepts no new attempts or answers.
