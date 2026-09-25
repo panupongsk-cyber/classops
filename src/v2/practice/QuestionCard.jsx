@@ -3,7 +3,8 @@ import { pick } from './api.js'
 
 // One exam question. `revealed` = { selected, answer } after answering (or browse mode's answer);
 // the key is never known here before that. Figures come from the authenticated figure route.
-export default function QuestionCard({ question, lang, selected, onSelect, revealed, disabled }) {
+// `bookmarks` (from useBookmarks) adds a star toggle; `unanswered` marks a reviewed question left blank.
+export default function QuestionCard({ question, lang, selected, onSelect, revealed, disabled, flagged, unanswered, bookmarks }) {
   const { t } = useI18n()
   const figure = (lang === 'th' && question.figure?.th) || question.figure?.en
   return (
@@ -11,6 +12,20 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
       <div className="v2-subtext" style={{ marginBottom: 6 }}>
         {question.examContentId} · Q{question.seq} · {question.category}{' '}
         <span className="v2-badge v2-badge-ta" title={t('practiceCategoryDisclosureHint')}>{t('practiceCategoryDisclosure')}</span>
+        {flagged && <span className="v2-badge v2-badge-flag">⚑ {t('examFlaggedBadge')}</span>}
+        {unanswered && <span className="v2-badge v2-badge-student">{t('examUnansweredBadge')}</span>}
+        {bookmarks && (
+          <button
+            type="button"
+            className={`v2-bookmark ${bookmarks.has(question.id) ? 'is-on' : ''}`}
+            aria-pressed={bookmarks.has(question.id)}
+            title={bookmarks.has(question.id) ? t('bookmarkRemove') : t('bookmarkAdd')}
+            aria-label={bookmarks.has(question.id) ? t('bookmarkRemove') : t('bookmarkAdd')}
+            onClick={() => bookmarks.toggle(question.id)}
+          >
+            {bookmarks.has(question.id) ? '★' : '☆'}
+          </button>
+        )}
       </div>
       <p style={{ whiteSpace: 'pre-wrap', margin: '0 0 12px' }}>{pick(question.stem, lang)}</p>
       {figure && <img src={figure} alt={t('practiceFigureAlt', { n: question.seq })} style={{ maxWidth: '100%', marginBottom: 12, border: '1px solid var(--v2-border)', borderRadius: 8 }} />}

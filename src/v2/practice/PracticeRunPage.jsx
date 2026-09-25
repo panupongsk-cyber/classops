@@ -4,7 +4,10 @@ import { ApiError } from '../auth/api.js'
 import { ForbiddenState, LoadingRows, RetryableError } from '../components/StateViews.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import { answerQuestion, finishAttempt, getAttempt } from './api.js'
+import ExamResult from './ExamResult.jsx'
+import ExamRun from './ExamRun.jsx'
 import QuestionCard from './QuestionCard.jsx'
+import useBookmarks from './useBookmarks.js'
 
 // A practice run or quick quiz: one question at a time; after each answer the server says whether
 // it was right and which option was; at the end, the score, a per-category tally, and a review.
@@ -17,6 +20,7 @@ export default function PracticeRunPage() {
   const [feedback, setFeedback] = useState(null) // { question, selected, correct, answer, next }
   const [lang, setLang] = useState('en')
   const [busy, setBusy] = useState(false)
+  const bookmarks = useBookmarks(sectionId)
 
   const load = useCallback(async () => {
     try {
@@ -36,8 +40,9 @@ export default function PracticeRunPage() {
   if (status === 'error') return <RetryableError onRetry={load} />
 
   const { attempt } = data
+  const isExam = attempt.mode === 'exam'
   const current = feedback?.question ?? data.next
-  const hasThai = Boolean(current?.stem?.th || data.review?.some((r) => r.question.stem.th))
+  const hasThai = Boolean(current?.stem?.th || data.review?.some((r) => r.question.stem.th) || data.questions?.some((q) => q.stem.th))
 
   async function submit() {
     if (!selected || !data.next) return
@@ -74,7 +79,7 @@ export default function PracticeRunPage() {
       <Link to={`/v2/sections/${sectionId}/practice`} className="v2-subtext">← {t('practiceBack')}</Link>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, margin: '8px 0', flexWrap: 'wrap' }}>
         <h1 className="v2-h1" style={{ margin: 0 }}>{t(`practiceMode_${attempt.mode}`)}</h1>
-        <span className="v2-subtext">{t('practiceProgress', { done: answered, total: attempt.questionCount })}</span>
+        {!isExam && <span className="v2-subtext">{t('practiceProgress', { done: answered, total: attempt.questionCount })}</span>}
         {hasThai && (
           <div className="v2-pill-group" role="radiogroup" aria-label={t('practiceQuestionLanguage')}>
             {['en', 'th'].map((l) => (
@@ -86,9 +91,16 @@ export default function PracticeRunPage() {
         )}
       </div>
 
-      {current && attempt.status === 'in_progress' && (
+      {isExam && attempt.status === 'in_progress' && data.questions && (
+        <ExamRun sectionId={sectionId} attemptId={attemptId} data={data} lang={lang} onFinished={load} />
+      )}
+      {isExam && attempt.status === 'in_progress' && !data.questions && (
+        <div className="v2-notice v2-notice-info">{t('examInProgressStaff', { done: attempt.answeredCount, total: attempt.questionCount })}</div>
+      )}
+
+      {!isExam && current && attempt.status === 'in_progress' && (
         <>
-          <QuestionCard question={current} lang={lang} selected={selected} onSelect={setSelected} revealed={feedback ? { selected: feedback.selected, answer: feedback.answer } : null} disabled={busy} />
+          <QuestionCard question={current} lang={lang} selected={selected} onSelect={setSelected} revealed={feedback ? { selected: feedback.selected, answer: feedback.answer } : null} disabled={busy} bookmarks={bookmarks} />
           {feedback && (
             <div className={`v2-notice ${feedback.correct ? 'v2-notice-info' : 'v2-notice-error'}`}>
               {feedback.correct ? t('practiceCorrect') : t('practiceWrong', { answer: feedback.answer })}
@@ -103,9 +115,10 @@ export default function PracticeRunPage() {
         </>
       )}
 
+      {data.review && isExam && data.result && <ExamResult attempt={attempt} result={data.result} byCategory={data.byCategory} />}
       {data.review && (
         <>
-          <div className="v2-card" style={{ textAlign: 'center', marginBottom: 16 }}>
+          {!isExam && <div className="v2-card" style={{ textAlign: 'center', marginBottom: 16 }}>
             <div className="v2-stat-value">{attempt.correctCount}/{attempt.questionCount}</div>
             <p className="v2-subtext">{t('practiceAnsweredOf', { done: attempt.answeredCount, total: attempt.questionCount })}</p>
             <table className="v2-table" style={{ textAlign: 'left' }}>
@@ -119,10 +132,10 @@ export default function PracticeRunPage() {
               </tbody>
             </table>
             <p className="v2-field-hint">{t('practiceCategoryDisclosureHint')}</p>
-          </div>
+          </div>}
           <h2 className="v2-h1" style={{ fontSize: '1.05rem' }}>{t('practiceReview')}</h2>
           {data.review.map((r) => (
-            <QuestionCard key={r.question.id} question={r.question} lang={lang} revealed={{ selected: r.selected, answer: r.question.answer }} />
+            <QuestionCard key={r.question.id} question={r.question} lang={lang} revealed={{ selected: r.selected, answer: r.question.answer }} flagged={r.flagged} unanswered={r.selected === null} bookmarks={bookmarks} />
           ))}
         </>
       )}

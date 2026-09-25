@@ -350,3 +350,48 @@
 .v2-file:focus-within .v2-btn-sm { outline: 2px solid var(--v2-primary); outline-offset: 2px; }
 .v2-file.is-disabled { opacity: .55; cursor: not-allowed; }
 .v2-file-name { font-size: .85rem; color: var(--v2-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* Mock exam (PS-TASK-20260925-767) */
+/* The page scrolls the window, but .v2-content's overflow makes it the sticky bar's scroll
+   container; release it on the exam page only, so the clock stays in view. */
+.v2-content:has(.v2-exam-bar) { overflow: visible; }
+.v2-exam-start { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--v2-border); }
+.v2-exam-bar {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 12px; background: #fff;
+  border: 1px solid var(--v2-border); border-radius: 12px; box-shadow: 0 2px 8px rgba(30,41,59,.06);
+}
+.v2-exam-clock { font-weight: 700; font-variant-numeric: tabular-nums; }
+.v2-exam-clock.is-warning { color: var(--v2-amber-fg); }
+.v2-exam-clock.is-danger { color: var(--v2-error-fg); }
+.v2-exam-palette-wrap { margin-bottom: 12px; }
+.v2-exam-palette-wrap > summary { cursor: pointer; font-size: .85rem; color: var(--v2-ink-muted); padding: 8px 0; min-height: 40px; }
+.v2-exam-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; }
+.v2-exam-cell {
+  position: relative; min-height: 40px; border-radius: 8px; border: 1.5px solid var(--v2-border-strong);
+  background: #fff; color: var(--v2-ink); font-size: .8rem; font-weight: 600; cursor: pointer;
+}
+.v2-exam-cell.is-answered { background: var(--v2-primary-tint); border-color: var(--v2-primary); color: var(--v2-primary); }
+.v2-exam-cell.is-flagged::after {
+  content: ''; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 999px; background: #d97706;
+}
+.v2-exam-cell.is-current { outline: 2px solid var(--v2-ink); outline-offset: 1px; }
+.v2-btn-flag-on { background: var(--v2-amber-bg); color: var(--v2-amber-fg); border: 1px solid #f59e0b; }
+.v2-badge-flag { background: var(--v2-amber-bg); color: var(--v2-amber-fg); }
+
+/* Practice progress (PS-TASK-20260925-770) */
+.v2-bookmark {
+  margin-left: auto; float: right; min-width: 40px; min-height: 40px; border: 0; background: none;
+  font-size: 1.25rem; line-height: 1; color: var(--v2-ink-faint); cursor: pointer; border-radius: 8px;
+}
+.v2-bookmark.is-on { color: #d97706; }
+.v2-bookmark:focus-visible { outline: 2px solid var(--v2-primary); }
+.v2-mastery { display: grid; gap: 10px; }
+.v2-mastery-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 8.5em; gap: 10px; align-items: center; font-size: .85rem; }
+.v2-mastery-bar { height: 8px; background: var(--v2-border); border-radius: 999px; overflow: hidden; }
+.v2-mastery-bar > div { height: 100%; background: var(--v2-primary); }
+.v2-mastery-value { text-align: right; white-space: nowrap; }
+@media (max-width: 640px) {
+  .v2-mastery-row { grid-template-columns: 1fr auto; }
+  .v2-mastery-bar { grid-column: 1 / -1; order: 3; }
+}

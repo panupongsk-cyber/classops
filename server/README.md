@@ -259,6 +259,35 @@ PS-TASK-20260925-755 (`routes/practice.ts`). The plan is
   review, and in browse mode.
 - **Figures** are PNG rows in `practice_figures`, served at `/api/practice/figures/:id`, signed-in
   only, with `Cache-Control: private`.
+- **Mock exam** (PS-TASK-20260925-767, migration `015_practice_exam.sql`). An `exam` attempt is
+  a whole session in order.
+  - **While running:**
+    - The owner gets the whole paper without keys, plus their selections and flags.
+    - Answers can go in any order, can be changed, and `selected: null` clears one.
+    - Flags go through `POST .../attempts/:id/flags`.
+  - **Deadline.** A timed attempt gets `deadline_at` from the session's `time_limit_minutes`.
+    - Answers after it, plus 5 s grace, are refused.
+    - The attempt is finished at its deadline, with `finish_reason = 'time_up'`, whenever it is
+      next read: the attempt itself or the history list.
+    - `timed: false` gives an untimed attempt.
+  - **Hidden until finished:** correctness and `correctCount`, including for staff.
+  - **Result.** The finished review adds a per-field `result`.
+    - It adds a pass estimate where the exam family has a rule.
+    - `itpec-ip`: at least 60% in total and 30% in each field, from the official *Outline of
+      ITPEC Common Examination from April 2024*.
+  - **Current conditions for every session.** The 120-minute limit and this rule are the current
+    ones, applied to every session, including papers set before April 2024.
+- **Personal progress** (PS-TASK-20260925-770, migration `016_practice_progress.sql`):
+  - **Bookmarks:** `GET` / `POST .../practice/bookmarks`, per learner and per Section.
+  - **Quick-quiz sources:** a quiz takes `source`: `all`, `bookmarks`, or `mistakes`.
+    Mistakes are the questions whose latest counted answer is wrong.
+  - **Statistics:** `GET .../practice/stats` returns the caller's accuracy, per-category
+    accuracy, the mock-exam trend with pass estimates, and the bookmark and mistake counts.
+  - **Most-missed ranking:** `GET .../practice/most-missed` is anonymous and visible to every
+    member. A question is listed only with at least 10 counted answers from at least 3 learners.
+  - **What counts:** every answer in the Section, except answers in a mock exam still in
+    progress. Their correctness stays hidden until the exam ends. Expired exams are settled
+    before statistics are read.
 
 ### Learning activities (server-scored games)
 
