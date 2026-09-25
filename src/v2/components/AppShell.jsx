@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useV2Auth } from '../auth/V2AuthContext.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
-import { listMemberships } from '../sections/api.js'
+import { getSection, listMemberships } from '../sections/api.js'
 import LangToggle from './LangToggle.jsx'
 
 const MANAGER_ROLES = ['owner', 'teacher', 'ta']
@@ -18,6 +18,7 @@ export default function AppShell({ children, sectionLabel }) {
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [isManager, setIsManager] = useState(null) // null = unknown/loading
+  const [practiceEnabled, setPracticeEnabled] = useState(false)
 
   const sectionMatch = location.pathname.match(/^\/v2\/sections\/([^/]+)/)
   const sectionId = sectionMatch?.[1]
@@ -34,6 +35,8 @@ export default function AppShell({ children, sectionLabel }) {
       const mine = result.memberships.find((m) => m.user_id === user?.id)
       setIsManager(Boolean(user?.isPlatformAdmin) || Boolean(mine?.roles.some((role) => MANAGER_ROLES.includes(role))))
     }).catch(() => { if (!cancelled) setIsManager(false) })
+    // Exam practice is opt-in per Section: students see the nav item only once it is enabled.
+    getSection(sectionId).then((result) => { if (!cancelled) setPracticeEnabled(Boolean(result.section.practice_enabled)) }).catch(() => {})
     return () => { cancelled = true }
   }, [sectionId, user])
 
@@ -94,6 +97,11 @@ export default function AppShell({ children, sectionLabel }) {
               <Link to={`/v2/sections/${sectionId}/activities`} className={`v2-navitem ${onActivitiesRoute ? 'is-active' : ''}`}>
                 {t('navActivities')}
               </Link>
+              {(isManager || practiceEnabled) && (
+                <Link to={`/v2/sections/${sectionId}/practice`} className={`v2-navitem ${location.pathname.includes('/practice') ? 'is-active' : ''}`}>
+                  {t('navPractice')}
+                </Link>
+              )}
               {isManager && (
                 <>
                   <Link to={`/v2/sections/${sectionId}/attendance`} className={`v2-navitem ${onAttendanceRoute ? 'is-active' : ''}`}>
