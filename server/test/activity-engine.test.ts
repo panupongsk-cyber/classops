@@ -161,6 +161,37 @@ test("scoring combines weighted parts", () => {
   assert.deepEqual(scoreItem(pkg, "i3", { v: rows("i3", "v", { c1: "CAN", c2: "CAN" }) }, SEED).parts, { v: 0.5 });
 });
 
+test("threshold_no_wrong matches the reference engine's pinned vectors", () => {
+  // Same vectors as the private reference test (activity-engine.test.mjs).
+  const pkg = syntheticPackage();
+  pkg.stages[1]!.items[0]!.parts[1] = {
+    key: "many",
+    type: "multi_select",
+    weight: 0.5,
+    shuffle: true,
+    options: ["m1", "m2", "m3", "m4", "m5"].map((id) => ({ id, label: t(id) })),
+    min: 1,
+    max: null,
+    scoring: { mode: "threshold_no_wrong", key: ["m1", "m2", "m3", "m4"], threshold: 3, partial_factor: 0.3 },
+  };
+  pkg.stages[1]!.items[0]!.rules = [];
+  assert.deepEqual(validatePackage(pkg), []);
+  const many = (ids: string[]) =>
+    scoreItem(pkg, "i2", { pair: i2(["p", "q"], []).pair, many: ids.map((id) => tok("i2", "many", id)) }, SEED).parts.many;
+  const cases: [string[], number][] = [
+    [["m1"], 0.1],
+    [["m1", "m2"], 0.2],
+    [["m1", "m2", "m3"], 0.75],
+    [["m1", "m2", "m3", "m4"], 1],
+    [["m1", "m5"], 0],
+    [["m1", "m2", "m3", "m4", "m5"], 0],
+  ];
+  for (const [ids, expected] of cases) near(many(ids) ?? -1, expected);
+  const bad = structuredClone(pkg);
+  (bad.stages[1]!.items[0]!.parts[1] as MultiSelectPart & { scoring: { threshold: number } }).scoring.threshold = 5;
+  assert.match(validatePackage(bad).join("\n"), /threshold: must be an integer between 1 and key.length/);
+});
+
 test("a firing rule zeroes the item and raises its flag", () => {
   const pkg = syntheticPackage();
   const r1 = scoreItem(pkg, "i1", i1("b", { r1: "X", r2: "X" }), SEED);

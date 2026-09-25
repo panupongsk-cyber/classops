@@ -47,7 +47,8 @@ export interface SingleChoicePart extends PartBase {
 }
 export type MultiScoring =
   | { mode: "credit_by_correct"; key: string[]; credit: number[] }
-  | { mode: "share_of_allowed"; allowed: string[] };
+  | { mode: "share_of_allowed"; allowed: string[] }
+  | { mode: "threshold_no_wrong"; key: string[]; threshold: number; partial_factor: number };
 export interface MultiSelectPart extends PartBase {
   type: "multi_select";
   shuffle: boolean;
@@ -449,8 +450,22 @@ function validateMultiScoring(part: Json, pp: string, ids: Set<string>, err: (p:
     if (!Array.isArray(allowed) || allowed.length === 0 || allowed.some((k) => !ids.has(k))) {
       err(`${pp}.scoring.allowed`, "must be a non-empty list of option ids");
     }
+  } else if (s.mode === "threshold_no_wrong") {
+    const key = s.key;
+    if (!Array.isArray(key) || key.length === 0 || key.some((k) => !ids.has(k)) || new Set(key).size !== key.length) {
+      err(`${pp}.scoring.key`, "must be a non-empty set of option ids");
+      return;
+    }
+    const threshold = s.threshold;
+    if (!Number.isInteger(threshold) || (threshold as number) < 1 || (threshold as number) > key.length) {
+      err(`${pp}.scoring.threshold`, "must be an integer between 1 and key.length");
+    }
+    const factor = s.partial_factor;
+    if (typeof factor !== "number" || factor < 0 || factor > 1) {
+      err(`${pp}.scoring.partial_factor`, "must be a number in [0, 1]");
+    }
   } else {
-    err(`${pp}.scoring.mode`, "must be credit_by_correct or share_of_allowed");
+    err(`${pp}.scoring.mode`, "must be credit_by_correct, share_of_allowed, or threshold_no_wrong");
   }
 }
 
@@ -585,6 +600,17 @@ function partRatio(part: Part, value: PartValue): number {
       for (const k of s.key) if (chosen.has(k)) n += 1;
       return s.credit[n] ?? 0;
     }
+    if (s.mode === "threshold_no_wrong") {
+      // Any pick outside the key scores 0. At least `threshold` correct picks score
+      // correct / |key|; fewer score partial_factor * correct / threshold.
+      let correct = 0;
+      for (const id of chosen) {
+        if (!s.key.includes(id)) return 0;
+        correct += 1;
+      }
+      if (correct >= s.threshold) return correct / s.key.length;
+      return correct > 0 ? s.partial_factor * (correct / s.threshold) : 0;
+    }
     let n = 0;
     for (const k of s.allowed) if (chosen.has(k)) n += 1;
     return Math.min(1, n / s.allowed.length);
@@ -649,7 +675,7 @@ export function correctAnswer(item: Item, seed: string) {
   for (const part of item.parts) {
     if (part.type === "single_choice") out[part.key] = optionToken(seed, item.key, part.key, part.answer_key);
     else if (part.type === "multi_select") {
-      const ids = part.scoring.mode === "credit_by_correct" ? part.scoring.key : part.scoring.allowed;
+      const ids = part.scoring.mode === "share_of_allowed" ? part.scoring.allowed : part.scoring.key;
       out[part.key] = ids.map((id) => optionToken(seed, item.key, part.key, id));
     } else {
       out[part.key] = Object.fromEntries(
