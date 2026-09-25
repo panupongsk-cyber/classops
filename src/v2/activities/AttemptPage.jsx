@@ -4,7 +4,7 @@ import { ApiError } from '../auth/api.js'
 import { ForbiddenState, LoadingRows, RetryableError } from '../components/StateViews.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import { getAttempt, percent } from './api.js'
-import ItemView from './ItemView.jsx'
+import ItemView, { emptyAnswer } from './ItemView.jsx'
 
 // Result of one attempt, for its learner or a Section manager. The review (each item with its
 // correct answer) is only returned by the server to the learner, and only when the package
@@ -76,7 +76,8 @@ export default function AttemptPage() {
             const response = data.responses.find((r) => r.itemKey === entry.item.key)
             return (
               <div key={entry.item.key} className="v2-card" style={{ marginBottom: 16 }}>
-                <ItemView item={entry.item} answer={blankAnswer(entry.item)} onAnswerChange={() => {}} locked correct={entry.correct} />
+                {/* The review shows the correct answers; the learner's own choices are not echoed back. */}
+                <ItemView item={entry.item} answer={emptyAnswer(entry.item)} onAnswerChange={() => {}} locked correct={entry.correct} />
                 <div className="v2-feedback" role="note">
                   {response && <div className="v2-feedback-score">{t('activityItemScore', { pct: percent(response.ratio) })}</div>}
                   {entry.explanation && <p style={{ margin: 0 }}>{entry.explanation}</p>}
@@ -88,11 +89,4 @@ export default function AttemptPage() {
       )}
     </div>
   )
-}
-
-// The review shows the correct answers; the learner's own choices are not echoed back.
-function blankAnswer(item) {
-  const answer = {}
-  for (const part of item.parts) answer[part.key] = part.type === 'multi_select' ? [] : part.type === 'single_choice' ? null : {}
-  return answer
 }
