@@ -212,9 +212,31 @@ PS-TASK-20260925-687. The v2 UI is under `src/v2/activities/` (PS-TASK-20260925-
   - Play, for learners with the `student` role: `POST /api/section-activities/:id/attempts`
     (start or resume), `POST /api/activity-attempts/:id/responses` (one item at a time, in order),
     and `POST /api/activity-attempts/:id/finish`.
-  - Review, for the owner or a manager: `GET /api/activity-attempts/:id`.
+  - Review, for the owner or a manager: `GET /api/activity-attempts/:id`. A manager also gets
+    `verification` (PS-TASK-20260925-734):
+    - the learner and their student ID
+    - the package slug, version, and content hash
+    - the scorer version
+    - a fresh re-score of the stored answers: `matches` is true only when every item ratio and
+      the total reproduce
   - Evidence, manager-only: `GET /api/section-activities/:id/evidence` and `.../evidence/export`
     (CSV).
+    - `evidence_policy` is `first`, `best`, `last`, or (since migration
+      `013_activity_gradebook_sync.sql`) `mean`, the average of all finished attempts.
+    - `evidence` is `{ policy, scoreRatio, bandIndex, attemptId, attemptCount }`. `attemptId` is
+      null for `mean`.
+  - Gradebook sync, manager-only (PS-TASK-20260925-734):
+    - Link an activity with `PATCH /api/section-activities/:id { assignmentId }`. The assignment
+      must be in the same Section.
+    - `GET .../gradebook-sync` previews each learner as `new`, `changed`, `unchanged`, `manual`,
+      or `no_attempt`, with the current and new points. Points are the policy ratio × `max_points`,
+      to 2 decimals.
+    - `POST .../gradebook-sync { overwriteUserIds }` recomputes and writes `new` and `changed`
+      rows. It writes a `manual` row only for a learner listed in `overwriteUserIds`, and never
+      touches a `no_attempt` row.
+    - `scores.synced_from_activity_id` and `synced_points` record what a sync wrote. A cell whose
+      points differ from `synced_points` is a hand edit.
+    - Each sync writes one `activity.gradebook_synced` audit event.
   - Student ID: `POST /api/sections/join` accepts an optional `studentId`, and
     `GET/PUT /api/sections/:sectionId/me/student-id` reads, sets, or clears it. It is never
     exposed through the member-visible roster.

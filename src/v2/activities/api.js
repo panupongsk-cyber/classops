@@ -43,6 +43,17 @@ export function getEvidence(activityId) {
   return apiRequest(`/api/section-activities/${activityId}/evidence`)
 }
 
+export function getGradebookSync(activityId) {
+  return apiRequest(`/api/section-activities/${activityId}/gradebook-sync`)
+}
+
+export function applyGradebookSync(activityId, overwriteUserIds) {
+  return apiRequest(`/api/section-activities/${activityId}/gradebook-sync`, {
+    method: 'POST',
+    body: JSON.stringify({ overwriteUserIds }),
+  })
+}
+
 // Raw text/csv, not JSON -- same Blob download pattern as the gradebook export.
 export async function downloadEvidenceCsv(activityId, filename) {
   const response = await fetch(apiUrl(`/api/section-activities/${activityId}/evidence/export`), {
