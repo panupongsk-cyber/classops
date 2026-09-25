@@ -10,10 +10,10 @@ import { generateOpaqueToken, hashToken } from "./security.js";
 import { decryptPayload, encryptPayload } from "./sealed-payload.js";
 
 // Rate limit for starting an OAuth sign-in (per provider route). Anonymous requests are keyed by
-// client IP, and with TRUST_PROXY=false (#721) every client presents the gateway's IP -- so this
-// bucket is shared by a whole class signing in at once. 200 per 15 minutes (raised from 20 on
-// 2026-09-25, PS-TASK-20260925-696) lets a large class sign in together while still bounding
-// abuse of the transaction table; per-client anonymous limits need #721.
+// client IP. Since PS-TASK-20260925-727 that is the real client address (TRUST_PROXY plus the
+// gateway's realip), but a class on the campus NAT still shares one address -- so 200 per 15
+// minutes (raised from 20 on 2026-09-25, PS-TASK-20260925-696) lets a large class sign in together
+// while still bounding abuse of the transaction table.
 export const OAUTH_START_RATE_LIMIT = { max: 200, timeWindow: "15 minutes" } as const;
 
 export function oauthBrowserBindingMatches(

@@ -124,6 +124,14 @@ test("Learning activities: import, attach, play, score, evidence, and access con
     const roster = await app.inject({ method: "GET", url: `/api/sections/${sectionId}/memberships`, headers: { cookie: bob.cookie } });
     assert.equal(roster.statusCode, 200);
     assert.ok(!roster.body.includes("65012345"));
+    // A student still sees classmates by name, but no email except their own.
+    type RosterRow = { user_id: string; email: string | null; display_name: string };
+    const rosterRows = roster.json().memberships as RosterRow[];
+    assert.ok(rosterRows.length >= 3 && rosterRows.some((m) => m.user_id === alice.userId));
+    for (const m of rosterRows) assert.equal(m.email, m.user_id === bob.userId ? "bob@example.com" : null, m.display_name);
+    assert.ok(!roster.body.includes("alice@example.com") && !roster.body.includes("teacher@example.com"));
+    const staffRoster = await app.inject({ method: "GET", url: `/api/sections/${sectionId}/memberships`, headers: { cookie: teacher.cookie } });
+    assert.ok((staffRoster.json().memberships as RosterRow[]).every((m) => typeof m.email === "string"), "staff still see every email");
 
     // --- Catalog and attach ---
     const catalogAsStudent = await app.inject({ method: "GET", url: "/api/activity-packages", headers: { cookie: alice.cookie } });

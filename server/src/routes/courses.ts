@@ -8,6 +8,13 @@ import { requireCurrentUser } from "../current-user.js";
 import type { DatabasePool } from "../db.js";
 import { withTransaction } from "../db.js";
 
+// Suspended users cannot become a Section owner (as in the admin owner reassignment). An unknown
+// id is left to the membership foreign key, which answers OWNER_USER_NOT_FOUND.
+async function isSuspended(pool: DatabasePool, userId: string) {
+  const result = await pool.query<{ status: string }>("SELECT status FROM users WHERE id = $1", [userId]);
+  return result.rows[0]?.status === "suspended";
+}
+
 const courseTypeSchema = z.enum(["semester", "self_paced", "short_course"]);
 const createCourseSchema = z.object({
   code: z.string().trim().min(1).max(50),
@@ -88,6 +95,9 @@ export async function registerCourseRoutes(
     const parsed = createCourseSchema.safeParse(request.body);
     if (!parsed.success) return validationError(reply, parsed.error);
     const ownerUserId = parsed.data.ownerUserId ?? user.id;
+    if (ownerUserId !== user.id && (await isSuspended(pool, ownerUserId))) {
+      return reply.code(400).send({ error: "OWNER_USER_SUSPENDED" });
+    }
     const joinCode = generateJoinCode();
 
     try {
@@ -148,6 +158,9 @@ export async function registerCourseRoutes(
     }
 
     const ownerUserId = parsed.data.ownerUserId ?? user.id;
+    if (ownerUserId !== user.id && (await isSuspended(pool, ownerUserId))) {
+      return reply.code(400).send({ error: "OWNER_USER_SUSPENDED" });
+    }
     const joinCode = generateJoinCode();
     try {
       const created = await withTransaction(pool, async (client) => {

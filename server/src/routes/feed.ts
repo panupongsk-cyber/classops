@@ -85,6 +85,12 @@ export async function registerFeedRoutes(
     return user;
   }
 
+  // Author emails are staff-only, as on the roster (memberships.ts): anyone else sees null except
+  // on their own posts and comments.
+  async function seesEmails(user: { id: string; isPlatformAdmin: boolean }, sectionId: string) {
+    return user.isPlatformAdmin || canManageSessions(await getSectionRoles(pool, user.id, sectionId));
+  }
+
   async function requireManager(request: FastifyRequest, reply: FastifyReply, sectionId: string) {
     const user = await requireCurrentUser(request, reply, pool, config);
     if (!user) return null;
@@ -107,7 +113,8 @@ export async function registerFeedRoutes(
 
     const result = await pool.query(
       `SELECT post.id, post.body, post.link_url, post.created_at, post.updated_at,
-              author.id AS author_user_id, author.email::text AS author_email,
+              author.id AS author_user_id,
+              CASE WHEN $3 OR author.id = $2 THEN author.email::text END AS author_email,
               author.display_name AS author_display_name,
               (SELECT count(*)::int FROM likes WHERE likes.post_id = post.id) AS like_count,
               EXISTS(
@@ -118,7 +125,7 @@ export async function registerFeedRoutes(
        JOIN users AS author ON author.id = post.author_user_id
        WHERE post.section_id = $1
        ORDER BY post.created_at DESC`,
-      [sectionId, user.id],
+      [sectionId, user.id, await seesEmails(user, sectionId)],
     );
     return reply.send({ posts: result.rows });
   });
@@ -192,13 +199,14 @@ export async function registerFeedRoutes(
 
     const result = await pool.query(
       `SELECT comment.id, comment.body, comment.created_at,
-              author.id AS author_user_id, author.email::text AS author_email,
+              author.id AS author_user_id,
+              CASE WHEN $3 OR author.id = $2 THEN author.email::text END AS author_email,
               author.display_name AS author_display_name
        FROM comments AS comment
        JOIN users AS author ON author.id = comment.author_user_id
        WHERE comment.post_id = $1
        ORDER BY comment.created_at`,
-      [postId],
+      [postId, user.id, await seesEmails(user, post.section_id)],
     );
     return reply.send({ comments: result.rows });
   });

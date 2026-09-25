@@ -32,10 +32,18 @@ removed; `qrcode.react` was kept because `src/v2/attendance/SessionLivePage.jsx`
   external repo keeps serving as the sole deploy target. That export is a manual step run locally
   (never a PersonalSchema CI secret — this repo never adds privileged CI credentials).
 - **Mirror status (2026-09-25):** the learning-activities module is exported to
-  `panupongsk-cyber/classops`: the server from PS-TASK-20260925-687, the UI and session-keyed rate
-  limit from -693, and the OAuth-start limit from -696. It includes migration
-  `011_learning_activities.sql`.
-  - **Production is not deployed yet.** Deployment follows the `PS-NODE-macmini` hand-off in
+  `panupongsk-cyber/classops` `main` `aa531079` (panupongsk-cyber/classops#14). The export
+  includes:
+  - the server from PS-TASK-20260925-687
+  - the UI and session-keyed rate limit from -693
+  - the OAuth-start limit from -696
+  - the Phase 3 part types and player components from -701, -705, and -708
+  - migration `011_learning_activities.sql`
+  - **Production is deployed.** On 2026-09-25, `PS-NODE-macmini` moved to release `aa53107`
+    through the hand-off in
     `work/handoffs/2026-09-25-macmini-classops-learning-activities-deploy.md`.
-  - Once 011 has been applied in production it can no longer be edited, so any later schema
+    - Migration 011 is applied, and all 14 learning-activity packages are imported.
+    - The previous release, `065108f`, is kept as the rollback target.
+    - The deploy evidence is on PersonalSchema Issue #693.
+  - Migration 011 is now applied in production, so it can no longer be edited. Any later schema
     change needs a new migration. `012` is reserved for the ITPEC practice plan.

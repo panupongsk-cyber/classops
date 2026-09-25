@@ -2,29 +2,56 @@
 
 ## Current deployment status
 
-As of 2026-09-11, this pack has been built, exercised on the Mac mini, and used to deploy the
-live self-hosted ClassOps v2 pilot at
-[classops.pshomelab.dev](https://classops.pshomelab.dev/). The public origin is routed through a
-Cloudflare Tunnel to the loopback-bound gateway on the host.
+As of 2026-09-25, this pack runs the live self-hosted ClassOps v2 at
+[classops.pshomelab.dev](https://classops.pshomelab.dev/) on the Mac mini. The public origin is
+routed through a Cloudflare Tunnel to the loopback-bound gateway on the host.
 
-This is a **Google-only, auth-only browser pilot**:
+**Release history** (`/opt/classops/releases/<short-commit>`, with `current` pointing at the
+active one):
 
-- Google OAuth sign-in has been verified against the live origin. Microsoft OAuth code exists but
-  is intentionally not configured; its activation is deferred in PersonalSchema work-tracker
-  issue **#712**.
-- The browser UI currently offers sign-in, logout, and a minimal account page only. The server's
-  Course/Section/Membership, attendance, Exit Ticket, Random Picker, Gradebook, Class Feed, and
-  Stats APIs are not browser features yet.
-- The live compose configuration deliberately uses `TRUST_PROXY=false`. This means public clients
-  can share a rate-limit bucket behind the proxy; the verified proxy-chain configuration is
-  deferred in **#721**.
-- Further operational evidence — production backup/restore rehearsal, reboot recovery,
-  public-IP alerting, wider security checks, documentation review, and the eventual full feature
-  walkthrough — is deferred in **#732**. The walkthrough cannot be claimed until the relevant v2
-  UI has been built.
+| Release | Date | What changed |
+|---|---|---|
+| `239a893` | 2026-09-11 | First production pilot: Google sign-in, logout, and an account page |
+| `065108f` | 2026-09-17 | v2 as the sole client (panupongsk-cyber/classops#10) |
+| `aa53107` | 2026-09-25 | Admin Console, and learning activities with migration `011_learning_activities.sql`. The 14 learning-activity packages were imported. Evidence is on PersonalSchema Issue #693. |
+
+`aa53107` is the active release, and `065108f` is its rollback target.
+
+**What the browser UI offers.** Google sign-in, plus these features:
+
+- sections, and creating courses and sections
+- attendance check-in
+- the gradebook
+- the class feed
+- stats
+- learning activities: play, the learner's own results, and the manager's evidence view with a
+  CSV download
+- the Admin Console
+
+**Limits that still apply.** The three deferred items below were issues in the archived `ps-work`
+tracker. They were not migrated to this repository, so a bare `#712`, `#721`, or `#732` in this
+repository means something else.
+
+- **Microsoft OAuth.** The code exists but is intentionally not configured. Its activation is
+  deferred in `ps-work#712`. The 2026-09-25 deploy changed no OAuth configuration.
+- **Rate-limit buckets (`ps-work#721`, fixed in PS-TASK-20260925-727).** This takes effect with
+  the first release that contains that task.
+  - The gateway resolves each client's own address, and the API sets
+    `TRUST_PROXY=172.16.0.0/12`.
+  - Signed-in traffic is keyed per user.
+  - Clients behind one NAT, such as a campus classroom, still share the anonymous buckets. The
+    OAuth-start limit is 200 per 15 minutes for that reason.
+- **Deferred operational evidence**, in `ps-work#732`:
+  - a backup/restore rehearsal against production
+  - reboot recovery. The host rebooted unattended on 2026-09-25 for a kernel update, and the
+    stack came back healthy on its own; this is an observation, not a rehearsal.
+  - public-IP alerting
+  - wider security checks
+  - documentation review
+  - the full feature walkthrough on the live origin, which is still to be done
 
 The legacy Firebase client remains a historical source code path. It is not the service currently
-served at the public v2 pilot hostname.
+served at the public v2 hostname.
 
 ## What this pack provides
 
@@ -48,9 +75,25 @@ served at the public v2 pilot hostname.
 - `APP_BASE_URL` and `TRUSTED_ORIGINS` must remain the exact public HTTPS origin:
   `https://classops.pshomelab.dev`.
 - Google OAuth's three settings must stay configured together. Leave all three Microsoft settings
-  unset until #712 is deliberately resumed and an Azure App Registration is available.
-- Do not change `TRUST_PROXY` merely to address #721. First verify the exact proxy hop and
-  forwarded-header behaviour at the deployed boundary.
+  unset until `ps-work#712` is deliberately resumed and an Azure App Registration is available.
+- **Change the client-address chain only after re-verifying it at the deployed boundary.** It is
+  Cloudflare edge → host `cloudflared` → `127.0.0.1:8080` → gateway → API.
+  - The gateway's `set_real_ip_from 172.16.0.0/12` and the API's `TRUST_PROXY=172.16.0.0/12` both
+    assume the Docker network stays inside `172.16.0.0/12`. It was `172.20.0.0/16` on
+    2026-09-25.
+  - If it moves, both fall back safely to the shared gateway address. Neither falls back to a
+    spoofable client-supplied value.
+- **Run as `classops`, without a login shell.** Releases and the secrets file belong to the
+  `classops` user, whose shell is `/usr/sbin/nologin`, so `sudo -iu classops` fails.
+  - Use `sudo -u classops -H bash <script>`.
+  - Start from a directory `classops` can read, such as `/opt/classops`. If it can't stat the
+    working directory, `docker compose` fails with `stat .: permission denied`.
+- **Invoke the scripts through `/opt/classops/current`.** The compose file sets no `name:`, so the
+  project name comes from the directory, and `current` holds the production volume
+  (`current_classops_v2_postgres_prod`). Invoking a script through
+  `/opt/classops/releases/<commit>/` would start a differently named project with an empty
+  database.
+  - Setting `COMPOSE_PROJECT_NAME=current` is a cheap extra safeguard.
 
 ## Operational commands
 

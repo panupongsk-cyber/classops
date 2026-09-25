@@ -223,6 +223,19 @@ test(
       });
       assert.equal(teacherComment.statusCode, 201);
 
+      // Author emails are staff-only: a classmate sees null, except on their own comment.
+      type CommentRow = { author_user_id: string; author_email: string | null };
+      const commentsAs = async (cookie: string) =>
+        (await app.inject({ method: "GET", url: `/api/posts/${postId}/comments`, headers: { cookie } })).json()
+          .comments as CommentRow[];
+      for (const c of await commentsAs(student2.cookie)) assert.equal(c.author_email, null);
+      const ownView = await commentsAs(student.cookie);
+      assert.ok(ownView.some((c) => c.author_user_id === student.userId && typeof c.author_email === "string"));
+      assert.ok(ownView.filter((c) => c.author_user_id !== student.userId).every((c) => c.author_email === null));
+      assert.ok((await commentsAs(plainTeacher.cookie)).every((c) => typeof c.author_email === "string"));
+      const feedAsClassmate = await app.inject({ method: "GET", url: `/api/sections/${sectionId}/feed`, headers: { cookie: student2.cookie } });
+      assert.ok((feedAsClassmate.json().posts as { author_email: string | null }[]).every((p) => p.author_email === null));
+
       // A different plain student cannot delete student's comment.
       const deleteByOtherStudent = await app.inject({
         method: "DELETE",

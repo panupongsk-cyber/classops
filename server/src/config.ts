@@ -1,11 +1,35 @@
 import "dotenv/config";
 
+import { isIP } from "node:net";
+
 import { z } from "zod";
 
-const booleanFromString = z
-  .enum(["true", "false"])
+// TRUST_PROXY: "false" (default), "true", or a comma-separated list of proxy addresses/CIDRs. With a
+// list, the client address is the right-most X-Forwarded-For entry not in the list, so a
+// client-supplied prefix cannot choose it. (A hop count is not accepted: Fastify 5.12 ignores it
+// under test and gives the socket address.) Production lists the gateway's Docker network
+// (compose.v2.prod.yml); the gateway overwrites X-Forwarded-For with the one client address it
+// resolved (ops/gateway/nginx.conf).
+function isAddressOrCidr(entry: string) {
+  const [address, prefix, extra] = entry.split("/");
+  const family = isIP(address ?? "");
+  if (!family || extra !== undefined) return false;
+  if (prefix === undefined) return true;
+  const bits = Number(prefix);
+  return /^[0-9]+$/.test(prefix) && bits <= (family === 4 ? 32 : 128);
+}
+
+const trustProxyFromString = z
+  .string()
   .default("false")
-  .transform((value) => value === "true");
+  .transform((value) => value.trim())
+  .refine(
+    (value) => value === "true" || value === "false" || value.split(",").every((entry) => isAddressOrCidr(entry.trim())),
+    { message: "must be true, false, or a comma-separated list of IP addresses/CIDRs" },
+  )
+  .transform((value): boolean | string[] =>
+    value === "true" ? true : value === "false" ? false : value.split(",").map((entry) => entry.trim()),
+  );
 
 // Compose/shell environments commonly pass an unset variable through as an empty string rather
 // than omitting the key entirely (e.g. `${GOOGLE_CLIENT_ID}` in a Compose `environment:` block
@@ -21,7 +45,7 @@ const baseSchema = z.object({
   DATABASE_URL: z.string().min(1),
   APP_BASE_URL: z.url(),
   TRUSTED_ORIGINS: z.string().min(1),
-  TRUST_PROXY: booleanFromString,
+  TRUST_PROXY: trustProxyFromString,
   SESSION_COOKIE_NAME: z.string().min(1).default("classops_session"),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(14),
   SEALED_PAYLOAD_ENCRYPTION_KEY: z.string().min(1).refine((value) => {

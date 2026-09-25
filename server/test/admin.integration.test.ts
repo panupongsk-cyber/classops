@@ -39,8 +39,9 @@ test(
     const pool = createDatabasePool(databaseUrl);
     await pool.query(
       `TRUNCATE audit_log, likes, comments, posts, scores, assignments, categories,
-                session_picks, exit_ticket_responses, exit_tickets, checkins,
-                attendance_sessions, session_schedule_patterns, memberships, sections, courses,
+                session_picks, exit_ticket_responses, exit_tickets, session_checkins,
+                class_sessions, session_schedule_patterns, activity_responses, activity_attempts,
+                section_activities, activity_packages, memberships, sections, courses,
                 oauth_transactions, sessions, auth_identities, users
        RESTART IDENTITY CASCADE`,
     );
@@ -258,8 +259,11 @@ test(
       },
     });
     assert.equal(createCourseRes.statusCode, 201);
-    const createdSectionId = createCourseRes.json().section.id;
-    const initialJoinCode = createCourseRes.json().section.joinCode;
+    // POST /api/courses answers { courseId, sectionId }; the join code is read back from the row.
+    const createdSectionId = createCourseRes.json().sectionId as string;
+    const initialJoinCode = (
+      await pool.query<{ join_code: string }>("SELECT join_code FROM sections WHERE id = $1", [createdSectionId])
+    ).rows[0]!.join_code;
 
     // Reactivate normalUser so they can enroll and later become owner
     await app.inject({
@@ -268,6 +272,13 @@ test(
       headers: { cookie: rootAdmin.cookie },
       payload: { status: "active" },
     });
+    // Suspension revoked normalUser's sessions, so they sign in again (a fresh session).
+    const rejoinToken = generateOpaqueToken();
+    await pool.query("INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '1 day')", [
+      normalUser.userId,
+      hashToken(rejoinToken),
+    ]);
+    normalUser.cookie = `classops_session=${rejoinToken}`;
 
     // Student joins with join code
     const joinRes = await app.inject({
@@ -431,7 +442,6 @@ test(
     });
     assert.equal(nonAdminAudit.statusCode, 403);
 
-    await app.close();
-    await pool.end();
+    await app.close(); // its onClose hook ends the pool
   },
 );

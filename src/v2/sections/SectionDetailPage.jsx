@@ -50,15 +50,16 @@ export default function SectionDetailPage() {
   const isManager = user?.isPlatformAdmin || myRoles.some((role) => MANAGER_ROLES.includes(role))
 
   return isManager
-    ? <ManagerView data={data} myRoles={myRoles} onChanged={load} />
+    ? <ManagerView data={data} myRoles={myRoles} isPlatformAdmin={Boolean(user?.isPlatformAdmin)} onChanged={load} />
     : <StudentView data={data} myRoles={myRoles} />
 }
 
-function ManagerView({ data, myRoles, onChanged }) {
+function ManagerView({ data, myRoles, isPlatformAdmin, onChanged }) {
   const { t } = useI18n()
   const { section, course, memberships } = data
-  const canRegenerate = myRoles.includes('owner') || myRoles.includes('teacher')
-  const canGrantOwner = myRoles.includes('owner')
+  // A platform admin may do both server-side (sections.ts, memberships.ts) without being a member.
+  const canRegenerate = isPlatformAdmin || myRoles.includes('owner') || myRoles.includes('teacher')
+  const canGrantOwner = isPlatformAdmin || myRoles.includes('owner')
 
   const [copied, setCopied] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
