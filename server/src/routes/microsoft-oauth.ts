@@ -116,6 +116,7 @@ export async function registerMicrosoftOAuthRoutes(
         displayName,
         isAdmin: email === config.adminGoogleEmail,
         auditEventType: "auth.microsoft_registered",
+        log: request.log,
       });
 
       if (result.emailCollision) {

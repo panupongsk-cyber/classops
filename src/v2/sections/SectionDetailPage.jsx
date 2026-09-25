@@ -6,6 +6,7 @@ import { ForbiddenState, LoadingRows, RetryableError, RoleBadges } from '../comp
 import { ApiError } from '../auth/api.js'
 import CheckInCard from '../attendance/CheckInCard.jsx'
 import ExitTicketStudentCard from '../attendance/ExitTicketStudentCard.jsx'
+import RosterImportCard from './RosterImportCard.jsx'
 import StudentIdCard from './StudentIdCard.jsx'
 import { getCourse, getSection, inviteMember, listMemberships, regenerateJoinCode, removeMember } from './api.js'
 
@@ -23,8 +24,9 @@ export default function SectionDetailPage() {
   const [data, setData] = useState(null) // { section, course, memberships }
   const [status, setStatus] = useState('loading') // loading | ok | forbidden | error
 
-  const load = useCallback(async () => {
-    setStatus('loading')
+  // `silent` refreshes in place (after a roster import) without unmounting the manager view.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setStatus('loading')
     try {
       const [sectionResult, membershipsResult] = await Promise.all([
         getSection(sectionId),
@@ -43,7 +45,7 @@ export default function SectionDetailPage() {
 
   if (status === 'loading') return <LoadingRows />
   if (status === 'forbidden') return <ForbiddenState />
-  if (status === 'error') return <RetryableError onRetry={load} />
+  if (status === 'error') return <RetryableError onRetry={() => load()} />
 
   const myMembership = data.memberships.find((m) => m.user_id === user?.id)
   const myRoles = myMembership?.roles ?? []
@@ -148,10 +150,13 @@ function ManagerView({ data, myRoles, isPlatformAdmin, onChanged }) {
         {inviteError && <p className="v2-field-error" style={{ margin: 0 }}>{inviteError}</p>}
       </form>
 
+      {canGrantOwner || myRoles.includes('teacher') ? <RosterImportCard sectionId={section.id} onImported={() => onChanged(true)} /> : null}
+
       <table className="v2-table">
         <thead>
           <tr>
             <th>{t('colName')}</th>
+            <th>{t('activityColStudentId')}</th>
             <th>{t('colEmail')}</th>
             <th>{t('colRoles')}</th>
             <th />
@@ -160,8 +165,15 @@ function ManagerView({ data, myRoles, isPlatformAdmin, onChanged }) {
         <tbody>
           {memberships.map((member) => (
             <tr key={member.user_id}>
-              <td>{member.display_name}</td>
-              <td className="is-muted">{member.email}</td>
+              <td>
+                {member.roster_name_th ?? member.display_name}
+                {member.roster_name_th && member.roster_name_th !== member.display_name && <div className="is-muted">{member.display_name}</div>}
+              </td>
+              <td>{member.student_id ?? <span className="is-muted">—</span>}</td>
+              <td className="is-muted">
+                {member.email}
+                {member.roster_email_mismatch && <div className="v2-field-error" style={{ margin: 0 }}>{t('rosterEmailMismatch')}</div>}
+              </td>
               <td><RoleBadges roles={member.roles} /></td>
               <td style={{ textAlign: 'right' }}>
                 <button

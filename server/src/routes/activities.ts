@@ -688,8 +688,12 @@ export async function registerActivityRoutes(
       display_name: string;
       email: string;
       student_id: string | null;
+      roster_name_th: string | null;
+      roster_email_mismatch: boolean;
     }>(
-      `SELECT app_user.id AS user_id, app_user.display_name, app_user.email::text, membership.student_id
+      `SELECT app_user.id AS user_id, app_user.display_name, app_user.email::text, membership.student_id,
+              membership.roster_name_th,
+              (membership.roster_email IS NOT NULL AND membership.roster_email <> app_user.email) AS roster_email_mismatch
        FROM memberships AS membership
        JOIN users AS app_user ON app_user.id = membership.user_id
        WHERE membership.section_id = $1 AND 'student' = ANY(membership.roles)
@@ -706,7 +710,11 @@ export async function registerActivityRoutes(
       const best = pickAttempt(finished, "best");
       return {
         userId: s.user_id,
-        displayName: s.display_name,
+        // The registrar's name when the roster supplied one, else the account's display name.
+        displayName: s.roster_name_th ?? s.display_name,
+        accountName: s.display_name,
+        // Claimed a roster row by student ID from an account whose email is not the roster's.
+        rosterEmailMismatch: s.roster_email_mismatch,
         email: s.email,
         studentId: s.student_id,
         attempts: mine.length,
@@ -767,6 +775,7 @@ export async function registerActivityRoutes(
       `Evidence Score % (${activity.evidence_policy})`,
       "Evidence Attempts Counted",
       "Evidence Band",
+      "Roster Email Mismatch",
     ];
     const rows = (await evidence(activity, pkg)).map((s) => [
       s.displayName,
@@ -780,6 +789,7 @@ export async function registerActivityRoutes(
       pct(s.evidence),
       s.evidence ? s.evidence.attemptCount : "",
       s.evidence && s.evidence.bandIndex !== null ? (bandView(pkg, s.evidence.bandIndex, lang)?.title ?? "") : "",
+      s.rosterEmailMismatch ? "yes" : "",
     ]);
     return reply
       .type("text/csv; charset=utf-8")

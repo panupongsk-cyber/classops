@@ -6,6 +6,7 @@ import * as oidc from "openid-client";
 import type { AppConfig } from "./config.js";
 import type { DatabaseClient, DatabasePool } from "./db.js";
 import { withTransaction } from "./db.js";
+import { claimRosterByEmail } from "./routes/roster.js";
 import { generateOpaqueToken, hashToken } from "./security.js";
 import { decryptPayload, encryptPayload } from "./sealed-payload.js";
 
@@ -149,6 +150,8 @@ export async function upsertOAuthUser(
     displayName: string;
     isAdmin: boolean;
     auditEventType: string;
+    /** Where a failed roster claim is reported; the sign-in itself proceeds regardless. */
+    log?: { warn: (obj: object, msg: string) => void };
   },
 ): Promise<OAuthUserResult> {
   return withTransaction(pool, async (databaseClient: DatabaseClient) => {
@@ -167,6 +170,7 @@ export async function upsertOAuthUser(
          WHERE id = $1`,
         [existingUserId, options.email, options.displayName, options.isAdmin],
       );
+      await claimRosterIfActive(databaseClient, existingUserId, options.email, options.log);
       return { userId: existingUserId, emailCollision: false };
     }
 
@@ -196,6 +200,30 @@ export async function upsertOAuthUser(
        VALUES ($1::uuid, $2, 'user', $1::uuid::text)`,
       [userId, options.auditEventType],
     );
+    await claimRosterIfActive(databaseClient, userId, options.email, options.log);
     return { userId, emailCollision: false };
   });
+}
+
+/**
+ * Pending roster rows for this email become student Memberships at sign-in (PS-TASK-20260925-744).
+ * Isolated in a savepoint: a roster failure must never fail the sign-in itself. The rows stay
+ * pending and are claimed at the next sign-in.
+ */
+async function claimRosterIfActive(
+  databaseClient: DatabaseClient,
+  userId: string,
+  email: string,
+  log?: { warn: (obj: object, msg: string) => void },
+) {
+  const status = await databaseClient.query<{ status: string }>("SELECT status FROM users WHERE id = $1", [userId]);
+  if (status.rows[0]?.status !== "active") return;
+  await databaseClient.query("SAVEPOINT roster_claim");
+  try {
+    await claimRosterByEmail(databaseClient, userId, email);
+    await databaseClient.query("RELEASE SAVEPOINT roster_claim");
+  } catch (error) {
+    await databaseClient.query("ROLLBACK TO SAVEPOINT roster_claim");
+    log?.warn({ err: error, userId }, "roster claim at sign-in failed; rows stay pending");
+  }
 }

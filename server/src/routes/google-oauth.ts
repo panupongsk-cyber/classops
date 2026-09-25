@@ -107,6 +107,7 @@ export async function registerGoogleOAuthRoutes(
         displayName,
         isAdmin: email === config.adminGoogleEmail,
         auditEventType: "auth.google_registered",
+        log: request.log,
       });
 
       if (result.emailCollision) {

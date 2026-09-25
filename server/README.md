@@ -186,6 +186,59 @@ exists.
 No new environment variable, container, background worker, or database table (see
 `phase2b4-deployment-spec.md`).
 
+### Roster import (registrar student list)
+
+Added in PS-TASK-20260925-744, with migration `014_section_roster.sql`.
+
+- **Who.** Owner, teacher, or a platform admin. `POST /api/sections/:sectionId/roster-import/preview`
+  and `POST .../roster-import` take the same body, `{ fileBase64, encoding?, section? }`, and run
+  the same plan. The first only reports; the second writes and records a `roster.imported` audit
+  event. The file itself is never stored.
+- **Encoding.** The registrar exports **TIS-620 / Windows-874**, not UTF-8. `auto` keeps strictly
+  valid UTF-8 (with or without a BOM) as UTF-8, and decodes anything else as TIS-620
+  (`src/roster-file.ts`, no codec library). The preview reports the encoding it chose and any
+  unmappable bytes.
+- **Columns: any institution's list** (PS-TASK-20260925-747). Every import goes through a column
+  mapping `{ studentId, email, nameTh[], nameEn[], section, courseCode }`, which the body may carry
+  as `mapping`.
+  - **Suggestions.** Without a mapping, one is suggested from English and Thai header synonyms
+    (`suggestMapping`: e.g. `email`/`อีเมล`/`อีเมล์`, `รหัสนักศึกษา`/`รหัสนิสิต`, `กลุ่มเรียน`).
+    The NU registrar header and the simple `student_id, name, email` template are covered
+    exactly.
+  - **Unrecognised headers.** When student ID or email can't be placed, the preview answers
+    `needsMapping` with the headers and three sample rows, and the import answers
+    `MAPPING_REQUIRED`. A mapping naming a column the file lacks answers `INVALID_MAPPING`.
+  - **Name parts.** They join with spaces, except that a prefix column (`คำนำหน้า`, `prefix`, …)
+    whose value ends in Thai glues onto the next part.
+  - Nothing is tied to one domain or ID format: emails are matched as listed, and student IDs are
+    any `[0-9A-Za-z-]{1,32}`.
+  - When the file holds several section values, `section` picks one.
+  - A course code that differs from the course is flagged.
+- **Per-row status.**
+  - Written:
+    - `enroll`: an account exists
+    - `update`: already a student member; the roster student ID wins, and a differing one is
+      shown as `studentIdConflict`
+    - `pending`: no account yet
+  - Skipped: `unchanged`, `invalid`, `duplicate`, `other_section`, and `staff`.
+  - Members missing from the file are listed, never removed.
+- **Pending rows** (`section_roster_entries`) exist because a `users` row cannot be pre-created:
+  without an auth identity it would make the student's first sign-in fail as an email collision.
+  - **At sign-in.** `upsertOAuthUser` claims every pending row for the email. The claim runs in a
+    savepoint, so a roster error never fails the sign-in.
+  - **By student ID.** Joining with the join code and a student ID that matches a pending row
+    claims that row too. A failed claim is logged and never fails the join. This covers a personal-Gmail account, and `roster_email` keeps the
+    listed address, so staff see the mismatch.
+  - `GET/DELETE /api/sections/:sectionId/roster-pending[/:id]` lists and cancels pending rows.
+- **Staff views.**
+  - The roster shows the registrar's names (`roster_name_th/en`), the student ID, and
+    `roster_email_mismatch`.
+  - Evidence and its CSV use the official Thai name, and carry the email-mismatch flag (the
+    "Roster Email Mismatch" CSV column).
+  - None of this reaches students.
+- **Real roster files carry student personal data** and never enter this repository. Tests use
+  `test/fixtures/synthetic-roster.ts`, whose people are invented.
+
 ### Learning activities (server-scored games)
 
 The plan is `../../classops-learning-games-development-plan.md`, and the server was built in
