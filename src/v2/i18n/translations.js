@@ -218,6 +218,10 @@ export const translations = {
     studentHomeYourRole: 'บทบาทของคุณ',
     studentHomeCeiling: 'โมดูลคะแนนและฟีด ยังไม่เปิดใช้งานในตอนนี้ — จะทยอยเปิดในเวอร์ชันถัดไป',
     studentHomeRoster: 'รายชื่อในวิชา',
+    ownerEmailLabel: 'อีเมลของเจ้าของ Section (ไม่บังคับ)',
+    ownerEmailHint: 'เว้นว่างเพื่อให้คุณเป็นเจ้าของเอง ผู้ใช้ที่ระบุต้องเคยเข้าสู่ระบบมาแล้วอย่างน้อยหนึ่งครั้ง',
+    ownerEmailNotFound: 'ไม่พบผู้ใช้ที่มีอีเมลนี้ ให้เขาเข้าสู่ระบบ ClassOps หนึ่งครั้งก่อน',
+    ownerEmailSuspended: 'บัญชีนี้ถูกระงับอยู่ จึงตั้งเป็นเจ้าของไม่ได้',
 
     loading: 'กำลังโหลด…',
     retry: 'ลองใหม่',
@@ -642,6 +646,10 @@ export const translations = {
     studentHomeYourRole: 'Your role',
     studentHomeCeiling: "Grades and feed aren't available yet — they'll roll out in later versions.",
     studentHomeRoster: 'Section roster',
+    ownerEmailLabel: 'Section owner email (optional)',
+    ownerEmailHint: 'Leave blank to be the owner yourself. The person must have signed in at least once.',
+    ownerEmailNotFound: 'No user has this email. Ask them to sign in to ClassOps once first.',
+    ownerEmailSuspended: 'This account is suspended, so it cannot be the owner.',
 
     loading: 'Loading…',
     retry: 'Retry',

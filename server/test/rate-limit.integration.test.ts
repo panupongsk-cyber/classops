@@ -23,8 +23,7 @@ async function createUserWithSession(pool: DatabasePool, email: string) {
   return { userId, cookie: `classops_session=${token}` };
 }
 
-// Every inject shares 127.0.0.1 -- exactly the classroom case (campus NAT, and the tunnel with
-// TRUST_PROXY=false, #721).
+// Every inject shares 127.0.0.1 -- exactly the classroom case (the campus NAT).
 test("App-wide rate limit is per verified session; unverified cookies share the IP bucket", { skip: !databaseUrl }, async () => {
   if (!databaseUrl) return;
   const pool = createDatabasePool(databaseUrl);
@@ -59,6 +58,41 @@ test("App-wide rate limit is per verified session; unverified cookies share the 
     assert.equal((await me(`classops_session=${generateOpaqueToken()}`)).statusCode, 429);
     assert.equal((await me()).statusCode, 429, "the anonymous IP bucket is the same one");
     assert.equal((await me(b.cookie)).statusCode, 200, "signed-in users are unaffected by it");
+  } finally {
+    await app.close();
+  }
+});
+
+// Production (TRUST_PROXY=<gateway network>): the gateway overwrites X-Forwarded-For with the one client address it
+// resolved, so anonymous traffic is bucketed per client, not per gateway. The injected socket
+// address (127.0.0.1) plays the gateway.
+test("With one trusted hop, anonymous clients get their own bucket from the gateway's X-Forwarded-For", { skip: !databaseUrl }, async () => {
+  if (!databaseUrl) return;
+  const pool = createDatabasePool(databaseUrl);
+  await pool.query("TRUNCATE sessions, auth_identities, users RESTART IDENTITY CASCADE");
+  const config: AppConfig = {
+    nodeEnv: "test",
+    host: "127.0.0.1",
+    port: 3000,
+    databaseUrl,
+    appBaseUrl: "http://localhost:5173",
+    trustedOrigins: ["http://localhost:5173"],
+    trustProxy: ["127.0.0.1"],
+    sessionCookieName: "classops_session",
+    sessionTtlDays: 14,
+    sealedPayloadEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
+    adminGoogleEmail: "admin@example.com",
+    googleOAuth: null,
+    microsoftOAuth: null,
+  };
+  const app = await buildApp({ config, pool });
+  try {
+    const from = (xff: string) => app.inject({ method: "GET", url: "/api/auth/me", headers: { "x-forwarded-for": xff } });
+    for (let i = 0; i < 100; i += 1) assert.equal((await from("198.51.100.1")).statusCode, 401);
+    assert.equal((await from("198.51.100.1")).statusCode, 429, "one client is still limited");
+    assert.equal((await from("198.51.100.2")).statusCode, 401, "another client is not");
+    // Only the last (gateway-written) entry counts: a client-chosen prefix cannot pick a bucket.
+    assert.equal((await from("203.0.113.7, 198.51.100.1")).statusCode, 429);
   } finally {
     await app.close();
   }

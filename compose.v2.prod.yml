@@ -71,7 +71,9 @@ services:
       DATABASE_URL: postgresql://classops:${POSTGRES_PASSWORD}@postgres:5432/classops
       APP_BASE_URL: ${APP_BASE_URL}
       TRUSTED_ORIGINS: ${APP_BASE_URL}
-      TRUST_PROXY: "false"
+      # Trust only the gateway's Docker network (172.20.0.0/16 on the Mac mini, 2026-09-25). The
+      # gateway resolves the client address and forwards only that (ops/gateway/nginx.conf).
+      TRUST_PROXY: "172.16.0.0/12"
       SEALED_PAYLOAD_ENCRYPTION_KEY: ${SEALED_PAYLOAD_ENCRYPTION_KEY}
       ADMIN_GOOGLE_EMAIL: ${ADMIN_GOOGLE_EMAIL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}

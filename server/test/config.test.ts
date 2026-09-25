@@ -99,3 +99,14 @@ test("Google and Microsoft OAuth configuration are independent of each other", (
   assert.notEqual(config.googleOAuth, null);
   assert.equal(config.microsoftOAuth, null);
 });
+
+test("TRUST_PROXY accepts false, true, or a list of IP addresses/CIDRs, and nothing else", () => {
+  assert.equal(withEnv({}, () => loadAppConfig()).trustProxy, false);
+  assert.equal(withEnv({ TRUST_PROXY: "false" }, () => loadAppConfig()).trustProxy, false);
+  assert.equal(withEnv({ TRUST_PROXY: "true" }, () => loadAppConfig()).trustProxy, true);
+  assert.deepEqual(withEnv({ TRUST_PROXY: "172.16.0.0/12" }, () => loadAppConfig()).trustProxy, ["172.16.0.0/12"]);
+  assert.deepEqual(withEnv({ TRUST_PROXY: "127.0.0.1, ::1/128" }, () => loadAppConfig()).trustProxy, ["127.0.0.1", "::1/128"]);
+  for (const bad of ["1", "yes", "172.16.0.0/33", "172.16.0.0/12/1", "10.0.0.0/8,"]) {
+    assert.throws(() => withEnv({ TRUST_PROXY: bad }, () => loadAppConfig()), Error, bad);
+  }
+});

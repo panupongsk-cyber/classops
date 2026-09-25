@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
 import type { MembershipRole } from "../authz.js";
-import { canManageMembership, getSectionRoles } from "../authz.js";
+import { canManageMembership, canManageSessions, getSectionRoles } from "../authz.js";
 import type { AppConfig } from "../config.js";
 import { requireCurrentUser } from "../current-user.js";
 import type { DatabasePool } from "../db.js";
@@ -37,13 +37,18 @@ export async function registerMembershipRoutes(
     if (!user.isPlatformAdmin && callerRoles.length === 0) {
       return reply.code(403).send({ error: "FORBIDDEN" });
     }
+    // Emails are staff-only. Other members still see the roster (names and roles: the student
+    // home lists classmates by name), but `email` is null for every row except their own.
+    const staff = user.isPlatformAdmin || canManageSessions(callerRoles);
     const result = await pool.query(
-      `SELECT app_user.id AS user_id, app_user.email::text, app_user.display_name, membership.roles
+      `SELECT app_user.id AS user_id,
+              CASE WHEN $2 OR membership.user_id = $3 THEN app_user.email::text END AS email,
+              app_user.display_name, membership.roles
        FROM memberships AS membership
        JOIN users AS app_user ON app_user.id = membership.user_id
        WHERE membership.section_id = $1
        ORDER BY app_user.display_name`,
-      [sectionId],
+      [sectionId, staff, user.id],
     );
     return reply.send({ memberships: result.rows });
   });

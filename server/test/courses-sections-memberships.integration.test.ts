@@ -111,6 +111,21 @@ test(
       });
       assert.equal(missingCourseResponse.statusCode, 404);
 
+      // A suspended user cannot be made the first Section's owner; an unknown id is not found.
+      const suspended = await createUserWithSession(pool, { email: "suspended@example.com", displayName: "Suspended" });
+      await pool.query("UPDATE users SET status = 'suspended' WHERE id = $1", [suspended.userId]);
+      const courseWithOwner = (ownerUserId: string) =>
+        app.inject({
+          method: "POST",
+          url: "/api/courses",
+          headers: { cookie: admin.cookie, ...origin },
+          payload: { code: "999999", title: "Never created", type: "semester", term: "2569/1", ownerUserId },
+        });
+      const suspendedOwner = await courseWithOwner(suspended.userId);
+      assert.deepEqual([suspendedOwner.statusCode, suspendedOwner.json().error], [400, "OWNER_USER_SUSPENDED"]);
+      const unknownOwner = await courseWithOwner("00000000-0000-0000-0000-000000000000");
+      assert.deepEqual([unknownOwner.statusCode, unknownOwner.json().error], [400, "OWNER_USER_NOT_FOUND"]);
+
       // Platform admin creates a Course + its first Section, granting the teacher as owner.
       const createCourseResponse = await app.inject({
         method: "POST",

@@ -636,7 +636,7 @@ export async function registerAdminRoutes(
          cs.scheduled_start,
          cs.scheduled_end,
          cs.active_emoji,
-         u.id AS host_id,
+         u.user_id AS host_id,
          u.email::text AS host_email,
          u.display_name AS host_display_name,
          COALESCE(ck.checked_in_count, 0)::int AS checked_in_count,

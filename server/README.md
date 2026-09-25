@@ -19,9 +19,10 @@ has been migrated into this database.
 The following pilot deferments are intentional:
 
 - **#712:** Microsoft OAuth is implemented in source but not configured in the live pilot.
-- **#721:** the live compose configuration keeps `TRUST_PROXY=false`; clients behind the public
-  proxy can therefore share a rate-limit bucket until the forwarding chain is verified and the
-  proxy configuration is changed deliberately.
+- **`ps-work#721` (resolved by PS-TASK-20260925-727):** the forwarding chain was verified at the
+  deployed boundary. The gateway takes the client address from the last `X-Forwarded-For` entry,
+  which the Cloudflare edge appends, and forwards only that. Compose sets
+  `TRUST_PROXY=172.16.0.0/12`, which trusts only the gateway's Docker network.
 - **#732:** remaining operational QA/hardening (including production backup/restore evidence,
   reboot recovery, alerting, and security checks) is deferred. Its eventual full feature
   walkthrough must wait for the corresponding browser UI.
@@ -36,7 +37,13 @@ The following pilot deferments are intentional:
   `semester`/`self_paced`/`short_course`), `Section` (one term's offering, carries a regenerable
   join code), `Membership` (per-`(user, section)` role set over `owner`/`teacher`/`student`/`ta`)
 - Membership authorization: `owner`/`teacher` manage `student`/`ta`; only an existing `owner` may
-  grant or revoke the `owner` role
+  grant or revoke the `owner` role (a platform admin may do either without being a member)
+- Email privacy (PS-TASK-20260925-727): the member-visible roster
+  (`GET /api/sections/:sectionId/memberships`) and the feed's posts and comments show names to
+  every member, but emails only to `owner`/`teacher`/`ta` or a platform admin. For anyone else,
+  `email`/`author_email` is `null` except on their own row, post, or comment.
+- A suspended user cannot be given a Section's `owner` role at Course or Section creation
+  (`OWNER_USER_SUSPENDED`), matching the admin owner reassignment.
 - Join-code self-enrollment, always granting `student` only
 - `ADMIN_GOOGLE_EMAIL` bootstrap: the matching account is flagged `is_platform_admin` on sign-in
 - Per-route rate limits, production origin checks for state-changing requests
@@ -212,14 +219,15 @@ PS-TASK-20260925-687. The v2 UI is under `src/v2/activities/` (PS-TASK-20260925-
     `GET/PUT /api/sections/:sectionId/me/student-id` reads, sets, or clears it. It is never
     exposed through the member-visible roster.
 - **Rate limit.** Every route is limited per **verified signed-in user**, not per IP
-  (`src/rate-limit-key.ts`, PS-TASK-20260925-693). A whole class shares one IP twice over: the
-  campus NAT, and the tunnel with `TRUST_PROXY=false` (#721).
-  - **Traffic before sign-in is still limited per IP, and with `TRUST_PROXY=false` every
-    client has the same IP (the gateway).** That affects the anonymous `/api/auth/me`, the
-    OAuth start route (`/api/auth/google`), and the OAuth callback. All of them are effectively
-    capped for everyone at once. The OAuth start limit was raised from 20 to **200 per 15
-    minutes** on 2026-09-25 (`OAUTH_START_RATE_LIMIT`, PS-TASK-20260925-696), so a class can sign
-    in together. #721 is still the fix for per-client limits on anonymous requests.
+  (`src/rate-limit-key.ts`, PS-TASK-20260925-693). A whole class on the campus NAT shares one
+  IP.
+  - **Traffic before sign-in is limited per client IP.** Since PS-TASK-20260925-727 that is the
+    real client address, not the gateway's, and an IPv6 client is bucketed by its /64 so it
+    cannot mint buckets by rotating addresses (`clientAddressBucket`). It covers the anonymous `/api/auth/me`, the OAuth
+    start route (`/api/auth/google`), and the OAuth callback.
+    - Clients behind one NAT, such as a classroom, still share those buckets.
+    - For that reason the OAuth start limit is **200 per 15 minutes** (`OAUTH_START_RATE_LIMIT`,
+      raised from 20 on 2026-09-25 in PS-TASK-20260925-696), so a class can sign in together.
   - The per-route limits (check-in and exit tickets at 20/min, OAuth start) now also count per
     signed-in user. A student with several accounts therefore gets that many buckets.
   - The key is the user id, but only when the session cookie maps to a live session.
