@@ -10,16 +10,118 @@ import { sessionRateLimitKey } from "../rate-limit-key.js";
 // Exam practice, Phase 1 (PS-TASK-20260925-755): ITPEC IT Passport, per-Section opt-in. Content
 // was imported from ps-practice-package/v1 files (scripts/import-practice.ts). An answer key is
 // never sent before the learner answers, except in browse mode, whose purpose is to show it.
+// Phase 2a (PS-TASK-20260925-767) adds the mock exam: a whole session, no key or correctness
+// until it is finished, changeable answers and flags, and a server-side deadline.
+// Phase 2b (PS-TASK-20260925-770) adds bookmarks, a mistakes quiz, personal statistics, and the
+// most-missed ranking. None of them count answers from a mock exam still in progress.
 
 const idSchema = z.uuid();
 const startSchema = z.object({
-  mode: z.enum(["practice", "quiz"]),
+  mode: z.enum(["practice", "quiz", "exam"]),
+  timed: z.boolean().default(true),
   examId: z.uuid().nullable().optional(),
   category: z.string().trim().min(1).max(100).nullable().optional(),
   lang: z.enum(["en", "th"]).default("en"),
   count: z.number().int().min(1).max(100).default(10),
+  // A quick quiz can draw from every question, the learner's bookmarks, or their current mistakes.
+  source: z.enum(["all", "bookmarks", "mistakes"]).default("all"),
 });
+const bookmarkSchema = z.object({ questionId: z.uuid(), bookmarked: z.boolean() });
+const mostMissedQuery = z.object({
+  examId: z.uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+// The most-missed ranking lists a question only once it has this many counted answers, from at
+// least MIN_LEARNERS different learners, so it never singles out one person's mistakes.
+const MOST_MISSED_MIN_ANSWERS = 10;
+const MOST_MISSED_MIN_LEARNERS = 3;
+
+/**
+ * Answers that count toward mistakes, statistics, and the ranking: every answer in the Section,
+ * except those in a mock exam still in progress (their correctness is hidden until it finishes).
+ * `$section` is the parameter placeholder for the Section id.
+ */
+const countedAnswers = (section: string) => `
+  SELECT x.question_id, x.is_correct, x.answered_at, a.user_id
+  FROM practice_answers AS x JOIN practice_attempts AS a ON a.id = x.attempt_id
+  WHERE a.section_id = ${section} AND (a.mode <> 'exam' OR a.status = 'finished')`;
+
+/** Questions whose latest counted answer by this learner is wrong. */
+const mistakeIds = (section: string, user: string) => `
+  SELECT question_id FROM (
+    SELECT DISTINCT ON (c.question_id) c.question_id, c.is_correct
+    FROM (${countedAnswers(section)}) AS c
+    WHERE c.user_id = ${user}
+    ORDER BY c.question_id, c.answered_at DESC
+  ) AS latest WHERE NOT latest.is_correct`;
+
 const answerSchema = z.object({ questionId: z.uuid(), selected: z.string().regex(/^[a-z]$/) });
+// A mock-exam answer may also be cleared.
+const examAnswerSchema = z.object({ questionId: z.uuid(), selected: z.string().regex(/^[a-z]$/).nullable() });
+const flagSchema = z.object({ questionId: z.uuid(), flagged: z.boolean() });
+
+// Answers that arrive this long after the deadline still count, so a click in the last second is
+// not lost to network latency. The client stops accepting input at the deadline itself.
+const DEADLINE_GRACE_SECONDS = 5;
+
+// Pass rules by exam family, from the official "Outline of ITPEC Common Examination from April
+// 2024": IP has 100 points (one per question); pass is 60% of the total and 30% in each field.
+// Field tags are analyst-inferred, so the result is an unofficial estimate.
+const PASS_RULES: Record<string, { total: number; perField: number }> = {
+  "itpec-ip": { total: 0.6, perField: 0.3 },
+};
+
+interface ScoredQuestion { id: string; field: string; category: string }
+
+/** Per-field and per-category tallies of an attempt, plus a pass estimate where the family has a rule. */
+export function scoreAttempt(
+  questions: ScoredQuestion[],
+  correctIds: Set<string>,
+  answeredIds: Set<string>,
+  family: string | null,
+  fieldOrder: string[] = [],
+) {
+  const tally = <K extends string>(key: (q: ScoredQuestion) => K) => {
+    const map = new Map<K, { questions: number; answered: number; correct: number }>();
+    for (const q of questions) {
+      const entry = map.get(key(q)) ?? { questions: 0, answered: 0, correct: 0 };
+      entry.questions += 1;
+      if (answeredIds.has(q.id)) entry.answered += 1;
+      if (correctIds.has(q.id)) entry.correct += 1;
+      map.set(key(q), entry);
+    }
+    return map;
+  };
+  const rule = family ? PASS_RULES[family] : undefined;
+  // Fields in the session's own order (its categories list), then any others by first appearance.
+  const rank = (field: string) => (fieldOrder.includes(field) ? fieldOrder.indexOf(field) : fieldOrder.length);
+  const fields = [...tally((q) => q.field)].sort(([a], [b]) => rank(a) - rank(b)).map(([field, t]) => ({
+    field,
+    ...t,
+    ratio: t.questions ? t.correct / t.questions : 0,
+    pass: rule ? t.questions > 0 && t.correct / t.questions >= rule.perField : null,
+  }));
+  const correct = questions.filter((q) => correctIds.has(q.id)).length;
+  const ratio = questions.length ? correct / questions.length : 0;
+  return {
+    correct,
+    questions: questions.length,
+    ratio,
+    fields,
+    pass: rule ? ratio >= rule.total && fields.every((f) => f.pass) : null,
+    rule: rule ?? null,
+  };
+}
+
+/** The same pass estimate from per-field totals (for the statistics trend). */
+export function passFromFieldTotals(fields: { correct: number; questions: number }[], family: string | null) {
+  const rule = family ? PASS_RULES[family] : undefined;
+  if (!rule) return null;
+  const correct = fields.reduce((n, f) => n + f.correct, 0);
+  const questions = fields.reduce((n, f) => n + f.questions, 0);
+  return questions > 0 && correct / questions >= rule.total && fields.every((f) => f.questions > 0 && f.correct / f.questions >= rule.perField);
+}
 const enableSchema = z.object({ enabled: z.boolean() });
 const browseQuery = z.object({
   category: z.string().trim().min(1).max(100).optional(),
@@ -167,8 +269,11 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
     if (!ctx) return;
     const parsed = startSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(reply, parsed.error);
-    const { mode, examId, category, lang, count } = parsed.data;
-    if (mode === "practice" && !examId) return reply.code(400).send({ error: "EXAM_REQUIRED" });
+    const { mode, examId, lang, count, timed } = parsed.data;
+    const source = mode === "quiz" ? parsed.data.source : "all";
+    // A mock exam is always a whole session, in order.
+    const category = mode === "exam" ? null : parsed.data.category;
+    if ((mode === "practice" || mode === "exam") && !examId) return reply.code(400).send({ error: "EXAM_REQUIRED" });
     const filters: string[] = [];
     const params: unknown[] = [];
     if (examId) {
@@ -179,17 +284,38 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
       params.push(category);
       filters.push(`category = $${params.length}`);
     }
+    if (source !== "all") {
+      await settleExpiredFor(ctx.sectionId, ctx.user.id);
+      params.push(ctx.sectionId, ctx.user.id);
+      const [sp, up] = [`$${params.length - 1}`, `$${params.length}`];
+      filters.push(
+        source === "bookmarks"
+          ? `id IN (SELECT question_id FROM practice_bookmarks WHERE section_id = ${sp} AND user_id = ${up})`
+          : `id IN (${mistakeIds(sp, up)})`,
+      );
+    }
     const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-    // Practice walks the session in order; a quick quiz draws `count` at random.
-    const order = mode === "practice" ? "ORDER BY seq" : `ORDER BY random() LIMIT ${count}`;
+    // Practice and the mock exam walk the session in order; a quick quiz draws `count` at random.
+    const order = mode === "quiz" ? `ORDER BY random() LIMIT ${count}` : "ORDER BY seq";
     const picked = await pool.query<{ id: string }>(`SELECT id FROM practice_questions ${where} ${order}`, params);
-    if (!picked.rowCount) return reply.code(400).send({ error: "NO_QUESTIONS" });
+    if (!picked.rowCount) {
+      const error = source === "bookmarks" ? "NO_BOOKMARKS" : source === "mistakes" ? "NO_MISTAKES" : "NO_QUESTIONS";
+      return reply.code(400).send({ error });
+    }
+    let limitSeconds: number | null = null;
+    if (mode === "exam" && timed) {
+      const exam = await pool.query<{ time_limit_minutes: number | null }>("SELECT time_limit_minutes FROM exam_sessions WHERE id = $1", [examId]);
+      const minutes = exam.rows[0]?.time_limit_minutes ?? null;
+      if (!minutes) return reply.code(400).send({ error: "NO_TIME_LIMIT" });
+      limitSeconds = minutes * 60;
+    }
     const inserted = await pool.query<{ id: string }>(
-      `INSERT INTO practice_attempts (user_id, section_id, mode, exam_session_id, category, lang, question_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::uuid[]) RETURNING id`,
-      [ctx.user.id, ctx.sectionId, mode, examId ?? null, category ?? null, lang, picked.rows.map((r) => r.id)],
+      `INSERT INTO practice_attempts (user_id, section_id, mode, exam_session_id, category, lang, question_ids, time_limit_seconds, deadline_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::uuid[], $8::integer, CASE WHEN $8::integer IS NULL THEN NULL ELSE now() + make_interval(secs => $8::integer) END)
+       RETURNING id`,
+      [ctx.user.id, ctx.sectionId, mode, examId ?? null, category ?? null, lang, picked.rows.map((r) => r.id), limitSeconds],
     );
-    return reply.code(201).send({ attemptId: inserted.rows[0]!.id, questionCount: picked.rowCount });
+    return reply.code(201).send({ attemptId: inserted.rows[0]!.id, questionCount: picked.rowCount, timeLimitSeconds: limitSeconds });
   });
 
   async function loadAttempt(request: FastifyRequest, reply: FastifyReply, ownerOnly: boolean) {
@@ -212,8 +338,12 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
       correct_count: number | null;
       started_at: Date;
       finished_at: Date | null;
+      time_limit_seconds: number | null;
+      deadline_at: Date | null;
+      flagged_question_ids: string[];
+      finish_reason: string | null;
     }>("SELECT * FROM practice_attempts WHERE id = $1 AND section_id = $2", [attemptId, ctx.sectionId]);
-    const attempt = result.rows[0];
+    let attempt = result.rows[0];
     if (!attempt) {
       await reply.code(404).send({ error: "ATTEMPT_NOT_FOUND" });
       return null;
@@ -223,7 +353,34 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
       await reply.code(403).send({ error: "FORBIDDEN" });
       return null;
     }
+    // A timed exam past its deadline (plus grace) is finished here, whoever reads it first.
+    if (await settleExpired(attempt.id)) {
+      attempt = (await pool.query<typeof attempt>("SELECT * FROM practice_attempts WHERE id = $1", [attempt.id])).rows[0]!;
+    }
     return { ctx, attempt, isOwner };
+  }
+
+  /** Settles every expired exam of this learner in this Section, before reading their history. */
+  async function settleExpiredFor(sectionId: string, userId: string) {
+    const expired = await pool.query<{ id: string }>(
+      `SELECT id FROM practice_attempts WHERE section_id = $1 AND user_id = $2 AND status = 'in_progress'
+         AND deadline_at IS NOT NULL AND now() > deadline_at + make_interval(secs => $3)`,
+      [sectionId, userId, DEADLINE_GRACE_SECONDS],
+    );
+    for (const row of expired.rows) await settleExpired(row.id);
+  }
+
+  /** Finishes a timed attempt whose deadline has passed. Returns whether it did. Race-safe. */
+  async function settleExpired(attemptId: string) {
+    const settled = await pool.query(
+      `UPDATE practice_attempts AS a
+       SET status = 'finished', finish_reason = 'time_up', finished_at = a.deadline_at,
+           correct_count = (SELECT count(*)::int FROM practice_answers AS x WHERE x.attempt_id = a.id AND x.is_correct)
+       WHERE a.id = $1 AND a.status = 'in_progress' AND a.deadline_at IS NOT NULL
+         AND now() > a.deadline_at + make_interval(secs => $2)`,
+      [attemptId, DEADLINE_GRACE_SECONDS],
+    );
+    return (settled.rowCount ?? 0) > 0;
   }
 
   async function attemptState(attempt: { id: string; question_ids: string[]; status: string; correct_count: number | null }) {
@@ -234,6 +391,21 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
     const answered = new Map(answers.rows.map((a) => [a.question_id, a]));
     const nextId = attempt.question_ids.find((id) => !answered.has(id)) ?? null;
     return { answered, nextId };
+  }
+
+  function tallyByCategory(questions: QuestionRow[], answered: Map<string, { is_correct: boolean }>) {
+    const byCategory = new Map<string, { category: string; field: string; questions: number; answered: number; correct: number }>();
+    for (const q of questions) {
+      const entry = byCategory.get(q.category) ?? { category: q.category, field: q.field, questions: 0, answered: 0, correct: 0 };
+      entry.questions += 1;
+      const a = answered.get(q.id);
+      if (a) {
+        entry.answered += 1;
+        if (a.is_correct) entry.correct += 1;
+      }
+      byCategory.set(q.category, entry);
+    }
+    return [...byCategory.values()];
   }
 
   app.get("/api/sections/:sectionId/practice/attempts/:attemptId", perUser, async (request, reply) => {
@@ -254,8 +426,40 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
         correctCount: [...answered.values()].filter((a) => a.is_correct).length,
         startedAt: attempt.started_at,
         finishedAt: attempt.finished_at,
+        timeLimitSeconds: attempt.time_limit_seconds,
+        deadlineAt: attempt.deadline_at,
+        finishReason: attempt.finish_reason,
       },
+      serverNow: new Date(),
     };
+    if (attempt.mode === "exam") {
+      if (attempt.status === "in_progress") {
+        // The whole paper, without keys: the learner's current selections and flags only.
+        if (loaded.isOwner) {
+          const questions = await loadQuestions(attempt.question_ids);
+          body.questions = questions.map((q) => questionView(q, false));
+          body.selections = Object.fromEntries([...answered].map(([id, a]) => [id, a.selected]));
+          body.flagged = attempt.flagged_question_ids;
+        }
+        // Correctness stays hidden until the exam is finished.
+        (body.attempt as Record<string, unknown>).correctCount = null;
+        return reply.send(body);
+      }
+      const questions = await loadQuestions(attempt.question_ids);
+      body.review = questions.map((q) => ({ question: questionView(q, true), selected: answered.get(q.id)?.selected ?? null, correct: answered.get(q.id)?.is_correct ?? null, flagged: attempt.flagged_question_ids.includes(q.id) }));
+      body.byCategory = tallyByCategory(questions, answered);
+      const exam = attempt.exam_session_id
+        ? (await pool.query<{ family: string; categories: { field: string }[] }>("SELECT family, categories FROM exam_sessions WHERE id = $1", [attempt.exam_session_id])).rows[0]
+        : undefined;
+      body.result = scoreAttempt(
+        questions,
+        new Set([...answered].filter(([, a]) => a.is_correct).map(([id]) => id)),
+        new Set(answered.keys()),
+        exam?.family ?? null,
+        [...new Set((exam?.categories ?? []).map((c) => c.field))],
+      );
+      return reply.send(body);
+    }
     if (attempt.status === "in_progress" && nextId && loaded.isOwner) {
       body.next = questionView((await loadQuestions([nextId]))[0]!, false);
     }
@@ -263,17 +467,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
       // The review: every question with the learner's answer and the key, and a per-category tally.
       const questions = await loadQuestions(attempt.question_ids);
       body.review = questions.map((q) => ({ question: questionView(q, true), selected: answered.get(q.id)?.selected ?? null, correct: answered.get(q.id)?.is_correct ?? null }));
-      const byCategory = new Map<string, { category: string; field: string; answered: number; correct: number }>();
-      for (const q of questions) {
-        const entry = byCategory.get(q.category) ?? { category: q.category, field: q.field, answered: 0, correct: 0 };
-        const a = answered.get(q.id);
-        if (a) {
-          entry.answered += 1;
-          if (a.is_correct) entry.correct += 1;
-        }
-        byCategory.set(q.category, entry);
-      }
-      body.byCategory = [...byCategory.values()];
+      body.byCategory = tallyByCategory(questions, answered);
     }
     return reply.send(body);
   });
@@ -283,6 +477,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
     if (!loaded) return;
     const { attempt } = loaded;
     if (attempt.status !== "in_progress") return reply.code(409).send({ error: "ATTEMPT_FINISHED" });
+    if (attempt.mode === "exam") return saveExamAnswer(request, reply, attempt);
     const parsed = answerSchema.safeParse(request.body);
     if (!parsed.success) return validationError(reply, parsed.error);
     const { answered, nextId } = await attemptState(attempt);
@@ -303,6 +498,56 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
     return reply.send({ correct, answer: question.answer, next });
   });
 
+  /** A mock-exam answer: any question, any order, changeable; saved without revealing correctness. */
+  async function saveExamAnswer(request: FastifyRequest, reply: FastifyReply, attempt: { id: string; question_ids: string[] }) {
+    const parsed = examAnswerSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
+    const { questionId, selected } = parsed.data;
+    if (!attempt.question_ids.includes(questionId)) return reply.code(400).send({ error: "NOT_IN_ATTEMPT" });
+    if (selected === null) {
+      await pool.query("DELETE FROM practice_answers WHERE attempt_id = $1 AND question_id = $2", [attempt.id, questionId]);
+    } else {
+      const question = (await loadQuestions([questionId]))[0]!;
+      if (!question.options.some((o) => o.label === selected)) return reply.code(400).send({ error: "NOT_AN_OPTION" });
+      // The write itself re-checks the deadline, so an answer can never land after it (plus grace).
+      const saved = await pool.query(
+        `INSERT INTO practice_answers (attempt_id, question_id, selected, is_correct)
+         SELECT $1, $2, $3, $4 FROM practice_attempts AS a
+         WHERE a.id = $1 AND a.status = 'in_progress'
+           AND (a.deadline_at IS NULL OR now() <= a.deadline_at + make_interval(secs => $5))
+         ON CONFLICT (attempt_id, question_id) DO UPDATE
+           SET selected = EXCLUDED.selected, is_correct = EXCLUDED.is_correct, answered_at = now()`,
+        [attempt.id, questionId, selected, selected === question.answer, DEADLINE_GRACE_SECONDS],
+      );
+      if (!saved.rowCount) {
+        await settleExpired(attempt.id);
+        return reply.code(409).send({ error: "TIME_UP" });
+      }
+    }
+    const count = await pool.query<{ n: number }>("SELECT count(*)::int AS n FROM practice_answers WHERE attempt_id = $1", [attempt.id]);
+    return reply.send({ saved: true, answeredCount: count.rows[0]!.n });
+  }
+
+  // Flag or unflag a mock-exam question for review (no deadline: flags don't change the score).
+  app.post("/api/sections/:sectionId/practice/attempts/:attemptId/flags", perUser, async (request, reply) => {
+    const loaded = await loadAttempt(request, reply, true);
+    if (!loaded) return;
+    const { attempt } = loaded;
+    if (attempt.mode !== "exam") return reply.code(400).send({ error: "NOT_AN_EXAM" });
+    if (attempt.status !== "in_progress") return reply.code(409).send({ error: "ATTEMPT_FINISHED" });
+    const parsed = flagSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
+    if (!attempt.question_ids.includes(parsed.data.questionId)) return reply.code(400).send({ error: "NOT_IN_ATTEMPT" });
+    const updated = await pool.query<{ flagged_question_ids: string[] }>(
+      `UPDATE practice_attempts
+       SET flagged_question_ids = CASE WHEN $3 THEN array_append(array_remove(flagged_question_ids, $2::uuid), $2::uuid)
+                                       ELSE array_remove(flagged_question_ids, $2::uuid) END
+       WHERE id = $1 RETURNING flagged_question_ids`,
+      [attempt.id, parsed.data.questionId, parsed.data.flagged],
+    );
+    return reply.send({ flagged: updated.rows[0]!.flagged_question_ids });
+  });
+
   app.post("/api/sections/:sectionId/practice/attempts/:attemptId/finish", perUser, async (request, reply) => {
     const loaded = await loadAttempt(request, reply, true);
     if (!loaded) return;
@@ -310,7 +555,12 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
     if (attempt.status !== "in_progress") return reply.code(409).send({ error: "ATTEMPT_FINISHED" });
     const { answered } = await attemptState(attempt);
     const correctCount = [...answered.values()].filter((a) => a.is_correct).length;
-    await pool.query("UPDATE practice_attempts SET status = 'finished', finished_at = now(), correct_count = $2 WHERE id = $1", [attempt.id, correctCount]);
+    const reason = attempt.mode === "exam" ? "submitted" : null;
+    const done = await pool.query(
+      "UPDATE practice_attempts SET status = 'finished', finished_at = now(), correct_count = $2, finish_reason = $3 WHERE id = $1 AND status = 'in_progress'",
+      [attempt.id, correctCount, reason],
+    );
+    if (!done.rowCount) return reply.code(409).send({ error: "ATTEMPT_FINISHED" });
     return reply.send({ correctCount, answeredCount: answered.size, questionCount: attempt.question_ids.length });
   });
 
@@ -318,15 +568,166 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
   app.get("/api/sections/:sectionId/practice/attempts", async (request, reply) => {
     const ctx = await authorizeSection(request, reply);
     if (!ctx) return;
+    await settleExpiredFor(ctx.sectionId, ctx.user.id);
     const result = await pool.query(
-      `SELECT a.id, a.mode, a.category, a.status, cardinality(a.question_ids) AS question_count, a.correct_count,
-              a.started_at, a.finished_at, s.content_id AS exam_content_id, s.title AS exam_title,
+      `SELECT a.id, a.mode, a.category, a.status, cardinality(a.question_ids) AS question_count,
+              CASE WHEN a.mode = 'exam' AND a.status = 'in_progress' THEN NULL ELSE a.correct_count END AS correct_count,
+              a.started_at, a.finished_at, a.deadline_at, a.finish_reason, s.content_id AS exam_content_id, s.title AS exam_title,
               (SELECT count(*)::int FROM practice_answers AS x WHERE x.attempt_id = a.id) AS answered_count
        FROM practice_attempts AS a LEFT JOIN exam_sessions AS s ON s.id = a.exam_session_id
        WHERE a.section_id = $1 AND a.user_id = $2 ORDER BY a.started_at DESC LIMIT 50`,
       [ctx.sectionId, ctx.user.id],
     );
     return reply.send({ attempts: result.rows });
+  });
+
+  // --- Bookmarks (the caller's own, in this Section) ---
+  app.get("/api/sections/:sectionId/practice/bookmarks", async (request, reply) => {
+    const ctx = await authorizeSection(request, reply);
+    if (!ctx) return;
+    const rows = await pool.query<{ question_id: string }>(
+      "SELECT question_id FROM practice_bookmarks WHERE section_id = $1 AND user_id = $2 ORDER BY created_at",
+      [ctx.sectionId, ctx.user.id],
+    );
+    return reply.send({ questionIds: rows.rows.map((r) => r.question_id) });
+  });
+
+  app.post("/api/sections/:sectionId/practice/bookmarks", perUser, async (request, reply) => {
+    const ctx = await authorizeSection(request, reply);
+    if (!ctx) return;
+    const parsed = bookmarkSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
+    const { questionId, bookmarked } = parsed.data;
+    if (bookmarked) {
+      const added = await pool.query(
+        `INSERT INTO practice_bookmarks (section_id, user_id, question_id)
+         SELECT $1, $2, id FROM practice_questions WHERE id = $3
+         ON CONFLICT DO NOTHING`,
+        [ctx.sectionId, ctx.user.id, questionId],
+      );
+      if (!added.rowCount) {
+        const exists = await pool.query("SELECT 1 FROM practice_questions WHERE id = $1", [questionId]);
+        if (!exists.rowCount) return reply.code(404).send({ error: "QUESTION_NOT_FOUND" });
+      }
+    } else {
+      await pool.query("DELETE FROM practice_bookmarks WHERE section_id = $1 AND user_id = $2 AND question_id = $3", [ctx.sectionId, ctx.user.id, questionId]);
+    }
+    const count = await pool.query<{ n: number }>("SELECT count(*)::int AS n FROM practice_bookmarks WHERE section_id = $1 AND user_id = $2", [ctx.sectionId, ctx.user.id]);
+    return reply.send({ bookmarked, count: count.rows[0]!.n });
+  });
+
+  // --- Personal statistics (the caller's own, in this Section) ---
+  app.get("/api/sections/:sectionId/practice/stats", async (request, reply) => {
+    const ctx = await authorizeSection(request, reply);
+    if (!ctx) return;
+    await settleExpiredFor(ctx.sectionId, ctx.user.id);
+    const args = [ctx.sectionId, ctx.user.id];
+    const overall = await pool.query<{ answered: number; correct: number; questions: number }>(
+      `SELECT count(*)::int AS answered, count(*) FILTER (WHERE c.is_correct)::int AS correct,
+              count(DISTINCT c.question_id)::int AS questions
+       FROM (${countedAnswers("$1")}) AS c WHERE c.user_id = $2`,
+      args,
+    );
+    const byCategory = await pool.query<{ field: string; category: string; answered: number; correct: number }>(
+      `SELECT q.field, q.category, count(*)::int AS answered, count(*) FILTER (WHERE c.is_correct)::int AS correct
+       FROM (${countedAnswers("$1")}) AS c JOIN practice_questions AS q ON q.id = c.question_id
+       WHERE c.user_id = $2 GROUP BY q.field, q.category`,
+      args,
+    );
+    // Fields and categories in the catalogue's own order (Strategy, Management, Technology for IP).
+    const catalogue = await pool.query<{ categories: { field: string; name: string }[] }>("SELECT categories FROM exam_sessions ORDER BY content_id DESC");
+    const fieldRank = new Map<string, number>();
+    const categoryRank = new Map<string, number>();
+    for (const row of catalogue.rows) {
+      for (const c of row.categories) {
+        if (!fieldRank.has(c.field)) fieldRank.set(c.field, fieldRank.size);
+        if (!categoryRank.has(c.name)) categoryRank.set(c.name, categoryRank.size);
+      }
+    }
+    const last = Number.MAX_SAFE_INTEGER;
+    byCategory.rows.sort(
+      (a, b) =>
+        (fieldRank.get(a.field) ?? last) - (fieldRank.get(b.field) ?? last) ||
+        (categoryRank.get(a.category) ?? last) - (categoryRank.get(b.category) ?? last) ||
+        a.category.localeCompare(b.category),
+    );
+    const exams = await pool.query<{ id: string; finished_at: Date; finish_reason: string; content_id: string; title: string; family: string; categories: { field: string }[] }>(
+      `SELECT a.id, a.finished_at, a.finish_reason, s.content_id, s.title, s.family, s.categories
+       FROM practice_attempts AS a JOIN exam_sessions AS s ON s.id = a.exam_session_id
+       WHERE a.section_id = $1 AND a.user_id = $2 AND a.mode = 'exam' AND a.status = 'finished'
+       ORDER BY a.finished_at`,
+      args,
+    );
+    const fieldRows = await pool.query<{ id: string; field: string; questions: number; correct: number }>(
+      `SELECT a.id, q.field, count(*)::int AS questions, count(x.question_id) FILTER (WHERE x.is_correct)::int AS correct
+       FROM practice_attempts AS a
+       CROSS JOIN LATERAL unnest(a.question_ids) AS qid
+       JOIN practice_questions AS q ON q.id = qid
+       LEFT JOIN practice_answers AS x ON x.attempt_id = a.id AND x.question_id = qid
+       WHERE a.section_id = $1 AND a.user_id = $2 AND a.mode = 'exam' AND a.status = 'finished'
+       GROUP BY a.id, q.field`,
+      args,
+    );
+    const fieldsOf = new Map<string, { field: string; questions: number; correct: number }[]>();
+    for (const r of fieldRows.rows) fieldsOf.set(r.id, [...(fieldsOf.get(r.id) ?? []), { field: r.field, questions: r.questions, correct: r.correct }]);
+    const trend = exams.rows.map((e) => {
+      const order = [...new Set(e.categories.map((c) => c.field))];
+      const rank = (f: string) => (order.includes(f) ? order.indexOf(f) : order.length);
+      const fields = (fieldsOf.get(e.id) ?? []).sort((a, b) => rank(a.field) - rank(b.field));
+      const correct = fields.reduce((n, f) => n + f.correct, 0);
+      const questions = fields.reduce((n, f) => n + f.questions, 0);
+      return {
+        attemptId: e.id,
+        finishedAt: e.finished_at,
+        finishReason: e.finish_reason,
+        examContentId: e.content_id,
+        examTitle: e.title,
+        correct,
+        questions,
+        fields,
+        pass: passFromFieldTotals(fields, e.family),
+      };
+    });
+    const bookmarks = await pool.query<{ n: number }>("SELECT count(*)::int AS n FROM practice_bookmarks WHERE section_id = $1 AND user_id = $2", args);
+    const mistakes = await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM (${mistakeIds("$1", "$2")}) AS m`, args);
+    return reply.send({
+      overall: overall.rows[0],
+      byCategory: byCategory.rows,
+      examTrend: trend,
+      bookmarkCount: bookmarks.rows[0]!.n,
+      mistakeCount: mistakes.rows[0]!.n,
+    });
+  });
+
+  // --- Most-missed questions in this Section (anonymous; every member sees it) ---
+  app.get("/api/sections/:sectionId/practice/most-missed", async (request, reply) => {
+    const ctx = await authorizeSection(request, reply);
+    if (!ctx) return;
+    const query = mostMissedQuery.safeParse(request.query);
+    if (!query.success) return validationError(reply, query.error);
+    const params: unknown[] = [ctx.sectionId, MOST_MISSED_MIN_ANSWERS, MOST_MISSED_MIN_LEARNERS, query.data.limit];
+    let examFilter = "";
+    if (query.data.examId) {
+      params.push(query.data.examId);
+      examFilter = `AND q.exam_session_id = $${params.length}`;
+    }
+    const ranked = await pool.query<{ question_id: string; answers: number; correct: number }>(
+      `SELECT c.question_id, count(*)::int AS answers, count(*) FILTER (WHERE c.is_correct)::int AS correct
+       FROM (${countedAnswers("$1")}) AS c JOIN practice_questions AS q ON q.id = c.question_id
+       WHERE true ${examFilter}
+       GROUP BY c.question_id
+       HAVING count(*) >= $2 AND count(DISTINCT c.user_id) >= $3
+       ORDER BY count(*) FILTER (WHERE c.is_correct)::float / count(*), count(*) DESC, c.question_id
+       LIMIT $4`,
+      params,
+    );
+    const questions = await loadQuestions(ranked.rows.map((r) => r.question_id));
+    const stats = new Map(ranked.rows.map((r) => [r.question_id, r]));
+    return reply.send({
+      minAnswers: MOST_MISSED_MIN_ANSWERS,
+      minLearners: MOST_MISSED_MIN_LEARNERS,
+      questions: questions.map((q) => ({ question: questionView(q, true), answers: stats.get(q.id)!.answers, correct: stats.get(q.id)!.correct })),
+    });
   });
 
   // --- Figures: any signed-in user. They are ITPEC-released exam figures, served from the
