@@ -239,6 +239,27 @@ Added in PS-TASK-20260925-744, with migration `014_section_roster.sql`.
 - **Real roster files carry student personal data** and never enter this repository. Tests use
   `test/fixtures/synthetic-roster.ts`, whose people are invented.
 
+### Exam practice (ITPEC IT Passport)
+
+Added in PS-TASK-20260925-751 (migration `012_practice.sql`, `scripts/import-practice.ts`) and
+PS-TASK-20260925-755 (`routes/practice.ts`). The plan is
+`../../itpec-ip-practice-development-plan.md`, revision 2026-09-25.
+
+- **Content** is `ps-practice-package/v1`, one file per exam session. The item bank's
+  `tools/export_practice.py` produces it, and it is imported at run time:
+  `node dist/scripts/import-practice.js /packages/<id>.json`.
+  - Identical content is a no-op, and changed content is refused. `--replace` works only while
+    no attempt has used the session.
+  - Question text, answer keys, and figures never enter this repository. Tests use
+    `test/fixtures/synthetic-practice.ts`.
+- **Access.** Practice is per-Section opt-in: `sections.practice_enabled`, default false. It is
+  toggled by owner, teacher, or a platform admin with `PATCH /api/sections/:id/practice`.
+  Students need it enabled; staff can always preview.
+- **Answer keys.** A key reaches the browser only in the answer response or the finished-attempt
+  review, and in browse mode.
+- **Figures** are PNG rows in `practice_figures`, served at `/api/practice/figures/:id`, signed-in
+  only, with `Cache-Control: private`.
+
 ### Learning activities (server-scored games)
 
 The plan is `../../classops-learning-games-development-plan.md`, and the server was built in
