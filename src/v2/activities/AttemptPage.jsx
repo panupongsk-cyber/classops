@@ -52,7 +52,7 @@ export default function AttemptPage() {
           {result.band?.description && <p className="v2-subtext" style={{ marginTop: 8 }}>{result.band.description}</p>}
           <p className="v2-subtext">{t('activityAnsweredOf', { done: result.answered, total: result.total })}</p>
           {result.stageResults && (
-            <table className="v2-table" style={{ marginTop: 12, textAlign: 'left' }}>
+            <table className="v2-table v2-table-wrap" style={{ marginTop: 12, textAlign: 'left' }}>
               <tbody>
                 {activity.stages.map((stage) => (
                   <tr key={stage.key}>

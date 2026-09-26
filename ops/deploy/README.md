@@ -17,13 +17,17 @@ active one):
 | `76de503` | 2026-09-25 | Wave 1 (PS-TASK-20260925-727): real client addresses for rate limits, staff-only member emails, the Admin → Live sessions fix, and owner choice for admins. No migration. Evidence is on #727. |
 | `e0f50a0` | 2026-09-25 | Wave 2 (PS-TASK-20260925-734): the `mean` evidence policy, teacher-triggered gradebook sync, and attempt verification, with migration `013_activity_gradebook_sync.sql`. Evidence is on #734. |
 | `efe0f12` | 2026-09-25 | Roster import from any student-list CSV, TIS-620 aware, with column mapping and pre-enrollment claimed at sign-in (PS-TASK-20260925-744, -747), with migration `014_section_roster.sql`. Evidence is on #744. |
-| `03e97a1` | 2026-09-25 | ITPEC IT Passport exam practice, opt-in per Section (PS-TASK-20260925-751, -755), with migration `012_practice.sql`. The 9 sessions (900 questions) were imported. Evidence is on #751 and #755. |
+| `03e97a1` | 2026-09-25 | ITPE IP (IT Passport) exam practice, opt-in per Section (PS-TASK-20260925-751, -755), with migration `012_practice.sql`. The 9 sessions (900 questions) were imported. Evidence is on #751 and #755. |
 | `8b4fd12` | 2026-09-25 | UI polish, frontend only (PS-TASK-20260925-762): phone tab-strip navigation, the Prompt font applied, a form-control baseline, 40px phone tap targets, and a localized file chooser. No migration. Evidence is on #762. |
-| `e51da94` | 2026-09-25 | ITPEC Phase 2 (PS-TASK-20260925-767, -770): the timed mock exam (a server-side deadline and a pass estimate against the official IP rule), and personal progress (bookmarks, a mistakes quiz, "My progress", and an anonymous most-missed ranking), with migrations `015_practice_exam.sql` and `016_practice_progress.sql`. No content re-import. Evidence is on #767 and #770. |
+| `e51da94` | 2026-09-25 | ITPE IP practice Phase 2 (PS-TASK-20260925-767, -770): the timed mock exam (a server-side deadline and a pass estimate against the official IP rule), and personal progress (bookmarks, a mistakes quiz, "My progress", and an anonymous most-missed ranking), with migrations `015_practice_exam.sql` and `016_practice_progress.sql`. No content re-import. Evidence is on #767 and #770. |
+| `0802c52` | 2026-09-26 | ITPE IP practice Phase 3 (PS-TASK-20260926-785, -789): teacher-set practice assignments (a whole session or a set drawn once; dates, attempts, evidence and review policies; a key lock while open), a staff results view with CSV, and opt-in gradebook sync, with migrations `017_practice_assignments.sql` and `018_practice_assignment_gradebook_sync.sql`. No content re-import. Evidence is on #785 and #789. |
 
-`e51da94` is the active release, and `8b4fd12` is its rollback target. A code-only rollback
-leaves migrations 012–016 and the imported content in place, and the older code ignores the
+`0802c52` is the active release, and `e51da94` is its rollback target. A code-only rollback
+leaves migrations 012–018 and the imported content in place, and the older code ignores the
 tables it doesn't know.
+- If you roll back past `0802c52`, an assignment attempt still in progress is handed to code
+  with no assignment review policy or key lock, so its keys could show before the due date. Roll
+  back when no assignment is open, or accept that risk. Synced gradebook cells stay as written.
 - If you roll back past `e51da94`, a mock exam still in progress is handed to older code that
   knows no `exam` mode and treats it as a practice run, showing the key after each answer. Roll
   back when no exam is running, or accept that risk.
@@ -46,10 +50,11 @@ tables it doesn't know.
   - gradebook sync with a preview
   - attempt verification
 - roster import from a student-list CSV, with pending pre-enrollment
-- ITPEC IT Passport exam practice, which a teacher enables per Section:
+- ITPE IP (IT Passport) exam practice, which a teacher enables per Section:
   - browse, practice, and quick quiz
   - a timed mock exam with a pass estimate
   - bookmarks, a mistakes quiz, and "My progress"
+  - teacher-set practice assignments, with results, CSV, and gradebook sync
 - the Admin Console
 
 **Limits that still apply.** The three deferred items below were issues in the archived `ps-work`

@@ -112,7 +112,7 @@ export default function PlayerPage() {
 
       {feedback ? (
         <div className="v2-card">
-          <ItemView item={feedback.lockedItem} answer={feedback.lockedAnswer} onAnswerChange={() => {}} locked correct={feedback.feedback.correct} />
+          <ItemView item={feedback.lockedItem} answer={feedback.lockedAnswer} onAnswerChange={() => {}} locked correct={feedback.feedback.correct} details={feedback.feedback.details} />
           <div className={`v2-feedback ${feedback.feedback.ratio >= 0.999 ? 'is-good' : feedback.feedback.ratio > 0 ? 'is-partial' : 'is-bad'}`} role="status">
             <div className="v2-feedback-score">{t('activityItemScore', { pct: percent(feedback.feedback.ratio) })}</div>
             {feedback.feedback.flags.map((flag) => (
@@ -139,6 +139,11 @@ export default function PlayerPage() {
             <div className="v2-stage-header">
               <div className="v2-stage-title">{stage.title}</div>
               {stage.brief && <p className="v2-subtext" style={{ margin: '4px 0 0' }}>{stage.brief}</p>}
+              {stage.goal && (
+                <p className="v2-subtext" style={{ margin: '6px 0 0' }}>
+                  <strong>{t('activityStageGoal')}</strong> {stage.goal}
+                </p>
+              )}
             </div>
           )}
           <ItemView item={play.next} answer={answer} onAnswerChange={setAnswer} />

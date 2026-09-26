@@ -46,4 +46,4 @@ removed; `qrcode.react` was kept because `src/v2/attendance/SessionLivePage.jsx`
     - The previous release, `065108f`, is kept as the rollback target.
     - The deploy evidence is on PersonalSchema Issue #693.
   - Migration 011 is now applied in production, so it can no longer be edited. Any later schema
-    change needs a new migration. `012` is reserved for the ITPEC practice plan.
+    change needs a new migration. `012` is reserved for the ITPE IP practice plan.
