@@ -15,6 +15,13 @@ export function practiceErrorText(t, code) {
   return text === key ? t('genericError') : text
 }
 
+// The exam's translation note: the exporter writes an official-edition note or an unofficial one
+// (PS-TASK-20260926-842), and the page must not call an unofficial translation an ITPEC edition.
+export function translationNoteKey(note) {
+  if (!note) return null
+  return /unofficial/i.test(note) ? 'practiceTranslationNoteUnofficial' : 'practiceTranslationNote'
+}
+
 // Exam practice home for a Section: enable (staff), pick an exam, then Practice, Quick Quiz, or
 // Browse; plus the caller's own history. Question text is English with a Thai toggle where the
 // session has the Thai-edition text.
@@ -165,7 +172,7 @@ export default function PracticePage() {
           {error && <p className="v2-field-error">{error}</p>}
           {exam && (
             <p className="v2-field-hint" style={{ marginBottom: 0 }}>
-              {exam.attribution}{exam.translation_note ? ` ${t('practiceTranslationNote')}` : ''}
+              {exam.attribution}{translationNoteKey(exam.translation_note) ? ` ${t(translationNoteKey(exam.translation_note))}` : ''}
             </p>
           )}
         </div>

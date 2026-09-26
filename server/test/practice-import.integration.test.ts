@@ -64,6 +64,43 @@ test("practice import: idempotent, refuses changed content, replaces only before
     again.questions[0]!.stem.en = "Second correction?";
     await assert.rejects(importPracticePackage(pool, again, { replace: true }), /already has attempts/);
 
+    // --update-text (PS-TASK-20260926-848): text-only changes land in place, keeping ids and attempts.
+    const before = (await pool.query<{ id: string; content_id: string }>("SELECT id, content_id FROM practice_questions ORDER BY seq")).rows;
+    const sessionBefore = (await pool.query<{ id: string }>("SELECT id FROM exam_sessions")).rows[0]!.id;
+    const retranslated = syntheticPracticePackage();
+    // Real packages list category keys as {field, name}; jsonb stores them in its own order.
+    retranslated.exam.categories = retranslated.exam.categories.map((c) => ({ field: c.field, name: c.name }));
+    retranslated.questions[0]!.stem = { en: "Corrected wording?", th: "ถ้อยคำที่แก้แล้ว" };
+    retranslated.questions[1]!.options[2]!.text = { en: "option c (reworded)", th: "ตัวเลือก c ที่เรียบเรียงใหม่" };
+    retranslated.exam.translation_note = "Thai text is an unofficial translation made for this course, not an ITPEC edition.";
+    const updated = await importPracticePackage(pool, retranslated, { updateText: true });
+    assert.equal(updated.status, "updated");
+    assert.equal(updated.id, sessionBefore, "the same exam session row");
+    assert.deepEqual((await pool.query<{ id: string; content_id: string }>("SELECT id, content_id FROM practice_questions ORDER BY seq")).rows, before, "question ids are kept");
+    assert.equal((await pool.query("SELECT 1 FROM practice_attempts")).rowCount, 1, "the attempt survives");
+    const q1 = (await pool.query<{ stem: { en: string; th: string } }>("SELECT stem FROM practice_questions WHERE seq = 1")).rows[0]!;
+    assert.deepEqual(q1.stem, { en: "Corrected wording?", th: "ถ้อยคำที่แก้แล้ว" });
+    assert.equal((await pool.query<{ options: { text: { th: string } }[] }>("SELECT options FROM practice_questions WHERE seq = 2")).rows[0]!.options[2]!.text.th, "ตัวเลือก c ที่เรียบเรียงใหม่");
+    assert.match((await pool.query<{ translation_note: string }>("SELECT translation_note FROM exam_sessions")).rows[0]!.translation_note, /unofficial/);
+    assert.equal((await importPracticePackage(pool, retranslated, { updateText: true })).status, "unchanged", "idempotent after the update");
+    assert.equal((await pool.query("SELECT 1 FROM audit_log WHERE event_type = 'practice_package.updated'")).rowCount, 1);
+
+    // Anything structural is refused, even in --update-text mode.
+    const structural: [string, (p: ReturnType<typeof syntheticPracticePackage>) => void][] = [
+      ["answer", (p) => { p.questions[0]!.answer = "a"; }],
+      ["option labels", (p) => { p.questions[1]!.options[3]!.label = "e"; if (p.questions[1]!.answer === "d") p.questions[1]!.answer = "e"; }],
+      ["categories", (p) => { p.questions[2]!.category = "Alpha"; p.questions[2]!.field = "Strategy"; }],
+      ["time limit", (p) => { p.exam.time_limit_minutes = 20; }],
+      ["figures", (p) => { p.questions[1]!.figure = null; p.figures = []; }],
+    ];
+    for (const [what, mutate] of structural) {
+      const pkg = syntheticPracticePackage();
+      pkg.questions[0]!.stem = { en: "Corrected wording?", th: "ถ้อยคำที่แก้แล้ว" };
+      mutate(pkg);
+      await assert.rejects(importPracticePackage(pool, pkg, { updateText: true }), /--update-text refused/, what);
+    }
+    assert.deepEqual((await pool.query<{ answer: string }>("SELECT answer FROM practice_questions ORDER BY seq")).rows.map((r) => r.answer), ["b", "c", "a", "d"], "refusals change nothing");
+
     const audits = await pool.query("SELECT 1 FROM audit_log WHERE event_type = 'practice_package.imported'");
     assert.equal(audits.rowCount, 2);
     assert.equal((await pool.query<{ practice_enabled: boolean }>("SELECT practice_enabled FROM sections WHERE id = $1", [section])).rows[0]!.practice_enabled, false, "off by default");

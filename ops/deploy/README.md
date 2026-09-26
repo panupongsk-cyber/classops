@@ -41,7 +41,9 @@ tables it doesn't know.
   is set again.
 - Importing practice content works like the activity packages:
   `node dist/scripts/import-practice.js /packages/<session>.json`, with packages from the item
-  bank's `tools/export_practice.py`.
+  bank's `tools/export_practice.py`. For a session that learners have already used, where only
+  its text changed (such as an added Thai translation), add `--update-text`. It keeps question
+  ids, so attempts stay valid, and it refuses anything structural.
 
 **What the browser UI offers.** Google sign-in, plus these features:
 
