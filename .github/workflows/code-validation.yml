@@ -7,6 +7,7 @@ on:
       - "server/**"
       - "package.json"
       - "package-lock.json"
+      - "vitest.config.js"
       - ".github/workflows/code-validation.yml"
 
 permissions:
@@ -39,5 +40,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - name: Frontend tests (Vitest + React Testing Library)
+        run: npm test
       - name: Build frontend bundle
         run: npx vite build

@@ -7,6 +7,14 @@ import { browseQuestions, getPracticeStats, listAttempts, listExams, setPractice
 import QuestionCard from './QuestionCard.jsx'
 import useBookmarks from './useBookmarks.js'
 
+// An error code with no message of its own (e.g. PRACTICE_NOT_ENABLED after a teacher turns free
+// practice off) shows the generic error rather than a raw i18n key.
+export function practiceErrorText(t, code) {
+  const key = `practiceError_${code}`
+  const text = t(key)
+  return text === key ? t('genericError') : text
+}
+
 // Exam practice home for a Section: enable (staff), pick an exam, then Practice, Quick Quiz, or
 // Browse; plus the caller's own history. Question text is English with a Thai toggle where the
 // session has the Thai-edition text.
@@ -73,7 +81,7 @@ export default function PracticePage() {
       const result = await startAttempt(sectionId, payload)
       navigate(`/v2/sections/${sectionId}/practice/attempts/${result.attemptId}`)
     } catch (err) {
-      setError(err instanceof ApiError ? t(`practiceError_${err.code}`) : t('genericError'))
+      setError(err instanceof ApiError ? practiceErrorText(t, err.code) : t('genericError'))
     }
   }
 
