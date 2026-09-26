@@ -277,6 +277,48 @@ PS-TASK-20260925-755 (`routes/practice.ts`). The plan is
       ITPEC Common Examination from April 2024*.
   - **Current conditions for every session.** The 120-minute limit and this rule are the current
     ones, applied to every session, including papers set before April 2024.
+- **Practice assignments** (PS-TASK-20260926-785, migration `017_practice_assignments.sql`,
+  `routes/practice-assignments.ts`). Staff (owner, teacher, TA, admin) create them under
+  `POST /api/sections/:id/practice/assignments`.
+  - **Kinds:**
+    - a whole session (`exam`)
+    - a set drawn **once, at creation, for everyone** (`set`), from one session or all
+      sessions, with an optional category
+  - **Settings** follow learning activities: draft/open/closed, opens/due dates,
+    `maxAttempts` (default 1), and an evidence policy (first/best/last/mean, default best). Plus
+    `reviewPolicy`: `after_due` (default) or `after_submit`.
+  - **Attempts.** `POST /api/practice-assignments/:id/attempts` starts or resumes one. Each is
+    an `exam`-mode practice attempt, so there is no key until it is finished, and it is served
+    by the practice attempt routes.
+  - **Deadlines:**
+    - no new attempt after the due date
+    - a timed attempt runs to its own deadline
+    - an untimed one ends at the due date, and follows a changed due date
+    - closing ends every running attempt
+  - **Practice off.** Assignments work even when the Section's free practice is off.
+    `GET /api/sections/:id` returns `practice_assignment_count` for the nav.
+  - **Key lock.** While an assignment is open (status `open`, not past due), students get no key
+    for its questions: browse (with `locked: true`), most-missed, practice and quiz draws, and
+    reviews. A self mock exam of a session containing them returns `LOCKED_BY_ASSIGNMENT`.
+    Staff are exempt. ITPEC papers are public, so this is in-app deterrence.
+  - **Pass estimate:** only for an attempt covering a whole paper (`item_count` questions), not
+    for a drawn set.
+  - **Results and gradebook sync** (PS-TASK-20260926-789, migration
+    `018_practice_assignment_gradebook_sync.sql`):
+    - **Results** (staff): `GET /api/practice-assignments/:id/results` gives learners (the
+      Section's `student` members; staff previews never count) with status, evidence ratio, and
+      latest per-field result. It also gives a summary (counts, mean, median, a 10-bucket
+      distribution) and item analysis over every finished learner attempt.
+    - **CSV export:** `.../results/export`. A points column appears once a gradebook assignment
+      is linked.
+    - **Link** (owner, teacher, or admin; not TA): `PATCH` with `gradebookAssignmentId`, which must
+      be in the same Section.
+    - **Sync:** `GET` / `POST .../gradebook-sync`, with the learning-activity rules: new,
+      changed, unchanged, manual (kept unless listed in `overwriteUserIds`), and no_attempt
+      (never zeroed).
+    - **Provenance:** `scores.synced_from_practice_assignment_id`. An activity sync clears it,
+      so the two can never mistake each other's cells for their own.
+    - **UI:** `GradebookSyncPanel` is shared by activity evidence and assignment results.
 - **Personal progress** (PS-TASK-20260925-770, migration `016_practice_progress.sql`):
   - **Bookmarks:** `GET` / `POST .../practice/bookmarks`, per learner and per Section.
   - **Quick-quiz sources:** a quiz takes `source`: `all`, `bookmarks`, or `mistakes`.

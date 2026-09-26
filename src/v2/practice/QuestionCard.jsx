@@ -14,7 +14,8 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
         <span className="v2-badge v2-badge-ta" title={t('practiceCategoryDisclosureHint')}>{t('practiceCategoryDisclosure')}</span>
         {flagged && <span className="v2-badge v2-badge-flag">⚑ {t('examFlaggedBadge')}</span>}
         {unanswered && <span className="v2-badge v2-badge-student">{t('examUnansweredBadge')}</span>}
-        {bookmarks && (
+        {question.locked && <span className="v2-badge v2-badge-flag" title={t('lockedKeyHint')}>🔒 {t('lockedKeyBadge')}</span>}
+        {bookmarks?.available && (
           <button
             type="button"
             className={`v2-bookmark ${bookmarks.has(question.id) ? 'is-on' : ''}`}
@@ -32,8 +33,10 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
       <div className="v2-choice-list" role="radiogroup">
         {question.options.map((o) => {
           const isSelected = (revealed?.selected ?? selected) === o.label
-          const isAnswer = revealed && revealed.answer === o.label
-          const wrong = revealed && isSelected && !isAnswer
+          // A locked key (an open assignment's question) marks nothing right or wrong.
+          const keyKnown = Boolean(revealed?.answer)
+          const isAnswer = keyKnown && revealed.answer === o.label
+          const wrong = keyKnown && isSelected && !isAnswer
           return (
             <button
               key={o.label}

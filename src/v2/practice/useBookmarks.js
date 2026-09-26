@@ -6,8 +6,11 @@ import { listBookmarks, setBookmark } from './api.js'
 // failure the server's list is re-read.
 export default function useBookmarks(sectionId) {
   const [ids, setIds] = useState(() => new Set())
+  const [available, setAvailable] = useState(false) // false while loading, or when free practice is off
   const chain = useRef(Promise.resolve())
-  const reload = useCallback(() => listBookmarks(sectionId).then((r) => setIds(new Set(r.questionIds))).catch(() => {}), [sectionId])
+  const reload = useCallback(() => listBookmarks(sectionId)
+    .then((r) => { setIds(new Set(r.questionIds)); setAvailable(true) })
+    .catch(() => setAvailable(false)), [sectionId])
   useEffect(() => { reload() }, [reload])
   const toggle = useCallback(async (questionId) => {
     const on = !ids.has(questionId)
@@ -24,5 +27,5 @@ export default function useBookmarks(sectionId) {
       reload()
     }
   }, [ids, sectionId, reload])
-  return useMemo(() => ({ has: (id) => ids.has(id), toggle, size: ids.size }), [ids, toggle])
+  return useMemo(() => ({ has: (id) => ids.has(id), toggle, size: ids.size, available }), [ids, toggle, available])
 }

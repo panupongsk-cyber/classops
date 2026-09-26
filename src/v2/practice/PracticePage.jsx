@@ -46,7 +46,17 @@ export default function PracticePage() {
 
   if (status === 'loading') return <LoadingRows />
   if (status === 'forbidden') return <ForbiddenState />
-  if (status === 'disabled') return <EmptyState icon="📘" heading={t('practiceDisabledHeading')} body={t('practiceDisabledBody')} />
+  if (status === 'disabled') {
+    // Free practice is off, but assignments still work.
+    return (
+      <>
+        <EmptyState icon="📘" heading={t('practiceDisabledHeading')} body={t('practiceDisabledBody')} />
+        <div style={{ textAlign: 'center' }}>
+          <Link to={`/v2/sections/${sectionId}/practice/assignments`} className="v2-btn v2-btn-primary">{t('assignTitlePage')}</Link>
+        </div>
+      </>
+    )
+  }
   if (status === 'error') return <RetryableError onRetry={load} />
 
   const exam = data.exams.find((e) => e.id === examId)
@@ -163,6 +173,15 @@ export default function PracticePage() {
           </div>
         </div>
       )}
+
+      <Link to={`/v2/sections/${sectionId}/practice/assignments`} className="v2-card v2-activities-link" style={{ marginBottom: 12 }}>
+        <span aria-hidden="true">📝</span>
+        <span>
+          <strong>{t('assignTitlePage')}</strong>
+          <p className="v2-subtext">{t('assignLinkHint')}</p>
+        </span>
+        <span aria-hidden="true">→</span>
+      </Link>
 
       <Link to={`/v2/sections/${sectionId}/practice/progress`} className="v2-card v2-activities-link" style={{ marginBottom: 16 }}>
         <span aria-hidden="true">📈</span>

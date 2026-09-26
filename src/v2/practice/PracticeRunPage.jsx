@@ -76,9 +76,11 @@ export default function PracticeRunPage() {
   const answered = attempt.answeredCount + (feedback ? 1 : 0)
   return (
     <div className="v2-content-narrow">
-      <Link to={`/v2/sections/${sectionId}/practice`} className="v2-subtext">← {t('practiceBack')}</Link>
+      {data.assignment
+        ? <Link to={`/v2/sections/${sectionId}/practice/assignments`} className="v2-subtext">← {t('assignBack')}</Link>
+        : <Link to={`/v2/sections/${sectionId}/practice`} className="v2-subtext">← {t('practiceBack')}</Link>}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, margin: '8px 0', flexWrap: 'wrap' }}>
-        <h1 className="v2-h1" style={{ margin: 0 }}>{t(`practiceMode_${attempt.mode}`)}</h1>
+        <h1 className="v2-h1" style={{ margin: 0 }}>{data.assignment?.title ?? t(`practiceMode_${attempt.mode}`)}</h1>
         {!isExam && <span className="v2-subtext">{t('practiceProgress', { done: answered, total: attempt.questionCount })}</span>}
         {hasThai && (
           <div className="v2-pill-group" role="radiogroup" aria-label={t('practiceQuestionLanguage')}>
@@ -102,8 +104,8 @@ export default function PracticeRunPage() {
         <>
           <QuestionCard question={current} lang={lang} selected={selected} onSelect={setSelected} revealed={feedback ? { selected: feedback.selected, answer: feedback.answer } : null} disabled={busy} bookmarks={bookmarks} />
           {feedback && (
-            <div className={`v2-notice ${feedback.correct ? 'v2-notice-info' : 'v2-notice-error'}`}>
-              {feedback.correct ? t('practiceCorrect') : t('practiceWrong', { answer: feedback.answer })}
+            <div className={`v2-notice ${feedback.correct ? 'v2-notice-info' : feedback.locked ? 'v2-notice-info' : 'v2-notice-error'}`}>
+              {feedback.locked ? t('lockedKeyHint') : feedback.correct ? t('practiceCorrect') : t('practiceWrong', { answer: feedback.answer })}
             </div>
           )}
           <div className="v2-btn-row" style={{ justifyContent: 'space-between' }}>
@@ -115,7 +117,12 @@ export default function PracticeRunPage() {
         </>
       )}
 
-      {data.review && isExam && data.result && <ExamResult attempt={attempt} result={data.result} byCategory={data.byCategory} />}
+      {isExam && data.result && <ExamResult attempt={attempt} result={data.result} byCategory={data.byCategory} />}
+      {isExam && data.result && !data.review && data.assignment && (
+        <div className="v2-notice v2-notice-info">
+          {data.assignment.reviewOpensAt ? t('assignReviewAfterDue', { when: new Date(data.assignment.reviewOpensAt).toLocaleString() }) : t('assignReviewAfterClose')}
+        </div>
+      )}
       {data.review && (
         <>
           {!isExam && <div className="v2-card" style={{ textAlign: 'center', marginBottom: 16 }}>
@@ -135,7 +142,7 @@ export default function PracticeRunPage() {
           </div>}
           <h2 className="v2-h1" style={{ fontSize: '1.05rem' }}>{t('practiceReview')}</h2>
           {data.review.map((r) => (
-            <QuestionCard key={r.question.id} question={r.question} lang={lang} revealed={{ selected: r.selected, answer: r.question.answer }} flagged={r.flagged} unanswered={r.selected === null} bookmarks={bookmarks} />
+            <QuestionCard key={r.question.id} question={r.locked ? { ...r.question, locked: true } : r.question} lang={lang} revealed={{ selected: r.selected, answer: r.question.answer }} flagged={r.flagged} unanswered={r.selected === null} bookmarks={bookmarks} />
           ))}
         </>
       )}

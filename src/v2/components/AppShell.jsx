@@ -37,7 +37,10 @@ export default function AppShell({ children, sectionLabel }) {
       setIsManager(Boolean(user?.isPlatformAdmin) || Boolean(mine?.roles.some((role) => MANAGER_ROLES.includes(role))))
     }).catch(() => { if (!cancelled) setIsManager(false) })
     // Exam practice is opt-in per Section: students see the nav item only once it is enabled.
-    getSection(sectionId).then((result) => { if (!cancelled) setPracticeEnabled(Boolean(result.section.practice_enabled)) }).catch(() => {})
+    // Assignments (PS-TASK-20260926-785) work even when free practice is off.
+    getSection(sectionId).then((result) => {
+      if (!cancelled) setPracticeEnabled(Boolean(result.section.practice_enabled) || result.section.practice_assignment_count > 0)
+    }).catch(() => {})
     return () => { cancelled = true }
   }, [sectionId, user])
 

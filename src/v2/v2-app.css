@@ -335,6 +335,7 @@
 }
 .v2-app select:disabled { opacity: .6; cursor: not-allowed; }
 .v2-btn, .v2-btn-sm { white-space: nowrap; justify-content: center; }
+a.v2-btn, a.v2-btn-sm { text-decoration: none; }
 .v2-btn:focus-visible, .v2-btn-sm:focus-visible { outline: 2px solid var(--v2-primary); outline-offset: 2px; }
 .v2-btn-secondary:hover:not(:disabled) { background: var(--v2-bg); }
 .v2-btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
@@ -395,3 +396,10 @@
   .v2-mastery-row { grid-template-columns: 1fr auto; }
   .v2-mastery-bar { grid-column: 1 / -1; order: 3; }
 }
+
+/* Practice assignment results (PS-TASK-20260926-789) */
+.v2-histogram { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 140px; }
+.v2-histogram-col { display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; height: 100%; text-align: center; }
+.v2-histogram-count { font-size: .72rem; color: var(--v2-ink-muted); min-height: 1em; }
+.v2-histogram-bar { background: var(--v2-primary); border-radius: 4px 4px 0 0; min-height: 2px; }
+.v2-histogram-label { font-size: .68rem; color: var(--v2-ink-faint); margin-top: 4px; }

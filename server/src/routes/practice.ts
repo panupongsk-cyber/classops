@@ -14,6 +14,11 @@ import { sessionRateLimitKey } from "../rate-limit-key.js";
 // until it is finished, changeable answers and flags, and a server-side deadline.
 // Phase 2b (PS-TASK-20260925-770) adds bookmarks, a mistakes quiz, personal statistics, and the
 // most-missed ranking. None of them count answers from a mock exam still in progress.
+// Phase 3a (PS-TASK-20260926-785) adds teacher-set assignments (routes/practice-assignments.ts).
+// While an assignment is open, students in its Section get no key for its questions anywhere
+// here (browse, most-missed, practice and quiz draws, reviews), and cannot take a self mock exam
+// of a session that contains them. Staff are exempt. The papers are public, so this deters rather
+// than secures.
 
 const idSchema = z.uuid();
 const startSchema = z.object({
@@ -147,6 +152,28 @@ const QUESTION_COLUMNS = `q.id, q.content_id, q.seq, q.stem, q.options, q.answer
   s.content_id AS exam_content_id`;
 
 /** Browser view of one question. `withAnswer` only in browse mode or after the learner answered. */
+/**
+ * When an assignment's answers stop needing protection: a timed attempt started just before the
+ * due date may run its full time limit past it, plus the deadline grace.
+ */
+export function assignmentReviewOpensAt(a: { due_at: Date | null; time_limit_seconds: number | null }) {
+  return a.due_at ? new Date(a.due_at.getTime() + ((a.time_limit_seconds ?? 0) + DEADLINE_GRACE_SECONDS) * 1000) : null;
+}
+
+/**
+ * Question ids of the Section's open assignments (open, and not past their effective close, as
+ * above): their keys are withheld from students until then.
+ */
+export async function lockedQuestionIds(pool: DatabasePool, sectionId: string) {
+  const rows = await pool.query<{ id: string }>(
+    `SELECT DISTINCT unnest(question_ids) AS id FROM practice_assignments
+     WHERE section_id = $1 AND status = 'open'
+       AND (due_at IS NULL OR due_at + make_interval(secs => COALESCE(time_limit_seconds, 0) + $2) > now())`,
+    [sectionId, DEADLINE_GRACE_SECONDS],
+  );
+  return new Set(rows.rows.map((r) => r.id));
+}
+
 function questionView(q: QuestionRow, withAnswer: boolean) {
   const figure = (id: string | null) => (id ? `/api/practice/figures/${encodeURIComponent(id)}` : null);
   return {
@@ -171,8 +198,12 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
   const { pool, config } = dependencies;
   const perUser = { config: { rateLimit: { max: 120, timeWindow: "1 minute", keyGenerator: sessionRateLimitKey(pool, config) } } };
 
-  /** A Section member; students only while practice is enabled, staff (and admins) always. */
-  async function authorizeSection(request: FastifyRequest, reply: FastifyReply) {
+  /**
+   * A Section member; students only while practice is enabled (unless `requireEnabled` is false,
+   * for assignment attempts), staff (and admins) always. `locked` is the set of question ids whose
+   * key this caller must not see (always empty for staff).
+   */
+  async function authorizeSection(request: FastifyRequest, reply: FastifyReply, options: { requireEnabled?: boolean } = {}) {
     const user = await requireCurrentUser(request, reply, pool, config);
     if (!user) return null;
     const { sectionId } = request.params as { sectionId: string };
@@ -192,11 +223,12 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
       return null;
     }
     const enabled = section.rows[0]!.practice_enabled;
-    if (!staff && !enabled) {
+    if (!staff && !enabled && options.requireEnabled !== false) {
       await reply.code(403).send({ error: "PRACTICE_NOT_ENABLED" });
       return null;
     }
-    return { user, sectionId, staff, enabled, roles };
+    const locked = staff ? new Set<string>() : await lockedQuestionIds(pool, sectionId);
+    return { user, sectionId, staff, enabled, roles, locked };
   }
 
   async function loadQuestions(ids: string[]) {
@@ -260,7 +292,12 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
        WHERE ${where} ORDER BY q.seq OFFSET ${offset} LIMIT ${limit}`,
       params,
     );
-    return reply.send({ total: total.rows[0]!.n, offset, limit, questions: rows.rows.map((q) => questionView(q, true)) });
+    return reply.send({
+      total: total.rows[0]!.n,
+      offset,
+      limit,
+      questions: rows.rows.map((q) => ({ ...questionView(q, !ctx.locked.has(q.id)), ...(ctx.locked.has(q.id) ? { locked: true } : {}) })),
+    });
   });
 
   // --- Start a practice run or a quick quiz ---
@@ -294,6 +331,15 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
           : `id IN (${mistakeIds(sp, up)})`,
       );
     }
+    if (ctx.locked.size) {
+      if (mode === "exam") {
+        const clash = await pool.query("SELECT 1 FROM practice_questions WHERE exam_session_id = $1 AND id = ANY($2::uuid[]) LIMIT 1", [examId, [...ctx.locked]]);
+        if (clash.rowCount) return reply.code(409).send({ error: "LOCKED_BY_ASSIGNMENT" });
+      } else {
+        params.push([...ctx.locked]);
+        filters.push(`NOT (id = ANY($${params.length}::uuid[]))`);
+      }
+    }
     const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
     // Practice and the mock exam walk the session in order; a quick quiz draws `count` at random.
     const order = mode === "quiz" ? `ORDER BY random() LIMIT ${count}` : "ORDER BY seq";
@@ -319,7 +365,8 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
   });
 
   async function loadAttempt(request: FastifyRequest, reply: FastifyReply, ownerOnly: boolean) {
-    const ctx = await authorizeSection(request, reply);
+    // Assignment attempts work even when free practice is off; checked below once loaded.
+    const ctx = await authorizeSection(request, reply, { requireEnabled: false });
     if (!ctx) return null;
     const { attemptId } = request.params as { attemptId: string };
     if (!idSchema.safeParse(attemptId).success) {
@@ -342,10 +389,15 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
       deadline_at: Date | null;
       flagged_question_ids: string[];
       finish_reason: string | null;
+      practice_assignment_id: string | null;
     }>("SELECT * FROM practice_attempts WHERE id = $1 AND section_id = $2", [attemptId, ctx.sectionId]);
     let attempt = result.rows[0];
     if (!attempt) {
       await reply.code(404).send({ error: "ATTEMPT_NOT_FOUND" });
+      return null;
+    }
+    if (!attempt.practice_assignment_id && !ctx.staff && !ctx.enabled) {
+      await reply.code(403).send({ error: "PRACTICE_NOT_ENABLED" });
       return null;
     }
     const isOwner = attempt.user_id === ctx.user.id;
@@ -429,9 +481,25 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
         timeLimitSeconds: attempt.time_limit_seconds,
         deadlineAt: attempt.deadline_at,
         finishReason: attempt.finish_reason,
+        assignmentId: attempt.practice_assignment_id,
       },
       serverNow: new Date(),
     };
+    // A key is shown in a review unless it is locked for this caller. An assignment's own review
+    // follows its review policy instead: after submission, or only once it is due (or closed).
+    let showKey = (id: string) => !loaded.ctx.locked.has(id);
+    if (attempt.practice_assignment_id) {
+      const a = (await pool.query<{ title: string; review_policy: string; due_at: Date | null; status: string; time_limit_seconds: number | null }>(
+        "SELECT title, review_policy, due_at, status, time_limit_seconds FROM practice_assignments WHERE id = $1",
+        [attempt.practice_assignment_id],
+      )).rows[0];
+      const opensAt = a ? assignmentReviewOpensAt(a) : null;
+      const reviewOpen = Boolean(a) && (
+        loaded.ctx.staff || a!.review_policy === "after_submit" || a!.status === "closed" || (opensAt !== null && opensAt <= new Date())
+      );
+      showKey = () => reviewOpen;
+      body.assignment = a ? { title: a.title, reviewPolicy: a.review_policy, dueAt: a.due_at, reviewOpensAt: opensAt, reviewOpen } : null;
+    }
     if (attempt.mode === "exam") {
       if (attempt.status === "in_progress") {
         // The whole paper, without keys: the learner's current selections and flags only.
@@ -446,16 +514,25 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
         return reply.send(body);
       }
       const questions = await loadQuestions(attempt.question_ids);
-      body.review = questions.map((q) => ({ question: questionView(q, true), selected: answered.get(q.id)?.selected ?? null, correct: answered.get(q.id)?.is_correct ?? null, flagged: attempt.flagged_question_ids.includes(q.id) }));
+      // An assignment whose review is not open yet shows the score, not the questions and keys.
+      const reviewHidden = Boolean(attempt.practice_assignment_id) && !questions.some((q) => showKey(q.id));
+      body.review = reviewHidden ? null : questions.map((q) => ({
+        question: questionView(q, showKey(q.id)),
+        selected: answered.get(q.id)?.selected ?? null,
+        correct: showKey(q.id) ? answered.get(q.id)?.is_correct ?? null : null,
+        flagged: attempt.flagged_question_ids.includes(q.id),
+        ...(showKey(q.id) ? {} : { locked: true }),
+      }));
       body.byCategory = tallyByCategory(questions, answered);
       const exam = attempt.exam_session_id
-        ? (await pool.query<{ family: string; categories: { field: string }[] }>("SELECT family, categories FROM exam_sessions WHERE id = $1", [attempt.exam_session_id])).rows[0]
+        ? (await pool.query<{ family: string; categories: { field: string }[]; item_count: number }>("SELECT family, categories, item_count FROM exam_sessions WHERE id = $1", [attempt.exam_session_id])).rows[0]
         : undefined;
       body.result = scoreAttempt(
         questions,
         new Set([...answered].filter(([, a]) => a.is_correct).map(([id]) => id)),
         new Set(answered.keys()),
-        exam?.family ?? null,
+        // The pass rule is for a whole paper; a drawn set gets scores without a pass estimate.
+        exam && questions.length === exam.item_count ? exam.family : null,
         [...new Set((exam?.categories ?? []).map((c) => c.field))],
       );
       return reply.send(body);
@@ -466,7 +543,12 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
     if (attempt.status === "finished" || !nextId) {
       // The review: every question with the learner's answer and the key, and a per-category tally.
       const questions = await loadQuestions(attempt.question_ids);
-      body.review = questions.map((q) => ({ question: questionView(q, true), selected: answered.get(q.id)?.selected ?? null, correct: answered.get(q.id)?.is_correct ?? null }));
+      body.review = questions.map((q) => ({
+        question: questionView(q, showKey(q.id)),
+        selected: answered.get(q.id)?.selected ?? null,
+        correct: showKey(q.id) ? answered.get(q.id)?.is_correct ?? null : null,
+        ...(showKey(q.id) ? {} : { locked: true }),
+      }));
       body.byCategory = tallyByCategory(questions, answered);
     }
     return reply.send(body);
@@ -495,6 +577,8 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
     ]);
     const remaining = attempt.question_ids.filter((id) => id !== question.id && !answered.has(id));
     const next = remaining[0] ? questionView((await loadQuestions([remaining[0]]))[0]!, false) : null;
+    // Only an attempt started before an assignment opened can reach a locked question.
+    if (loaded.ctx.locked.has(question.id)) return reply.send({ correct: null, answer: null, locked: true, next });
     return reply.send({ correct, answer: question.answer, next });
   });
 
@@ -573,8 +657,10 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
       `SELECT a.id, a.mode, a.category, a.status, cardinality(a.question_ids) AS question_count,
               CASE WHEN a.mode = 'exam' AND a.status = 'in_progress' THEN NULL ELSE a.correct_count END AS correct_count,
               a.started_at, a.finished_at, a.deadline_at, a.finish_reason, s.content_id AS exam_content_id, s.title AS exam_title,
+              a.practice_assignment_id AS assignment_id, pa.title AS assignment_title,
               (SELECT count(*)::int FROM practice_answers AS x WHERE x.attempt_id = a.id) AS answered_count
        FROM practice_attempts AS a LEFT JOIN exam_sessions AS s ON s.id = a.exam_session_id
+       LEFT JOIN practice_assignments AS pa ON pa.id = a.practice_assignment_id
        WHERE a.section_id = $1 AND a.user_id = $2 ORDER BY a.started_at DESC LIMIT 50`,
       [ctx.sectionId, ctx.user.id],
     );
@@ -651,8 +737,8 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
         (categoryRank.get(a.category) ?? last) - (categoryRank.get(b.category) ?? last) ||
         a.category.localeCompare(b.category),
     );
-    const exams = await pool.query<{ id: string; finished_at: Date; finish_reason: string; content_id: string; title: string; family: string; categories: { field: string }[] }>(
-      `SELECT a.id, a.finished_at, a.finish_reason, s.content_id, s.title, s.family, s.categories
+    const exams = await pool.query<{ id: string; finished_at: Date; finish_reason: string; content_id: string; title: string; family: string; categories: { field: string }[]; item_count: number }>(
+      `SELECT a.id, a.finished_at, a.finish_reason, s.content_id, s.title, s.family, s.categories, s.item_count
        FROM practice_attempts AS a JOIN exam_sessions AS s ON s.id = a.exam_session_id
        WHERE a.section_id = $1 AND a.user_id = $2 AND a.mode = 'exam' AND a.status = 'finished'
        ORDER BY a.finished_at`,
@@ -685,11 +771,15 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
         correct,
         questions,
         fields,
-        pass: passFromFieldTotals(fields, e.family),
+        pass: questions === e.item_count ? passFromFieldTotals(fields, e.family) : null,
       };
     });
     const bookmarks = await pool.query<{ n: number }>("SELECT count(*)::int AS n FROM practice_bookmarks WHERE section_id = $1 AND user_id = $2", args);
-    const mistakes = await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM (${mistakeIds("$1", "$2")}) AS m`, args);
+    // Locked questions are left out of the mistakes quiz, so leave them out of its count too.
+    const mistakes = await pool.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM (${mistakeIds("$1", "$2")}) AS m WHERE NOT (m.question_id = ANY($3::uuid[]))`,
+      [...args, [...ctx.locked]],
+    );
     return reply.send({
       overall: overall.rows[0],
       byCategory: byCategory.rows,
@@ -710,6 +800,10 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
     if (query.data.examId) {
       params.push(query.data.examId);
       examFilter = `AND q.exam_session_id = $${params.length}`;
+    }
+    if (ctx.locked.size) {
+      params.push([...ctx.locked]);
+      examFilter += ` AND NOT (c.question_id = ANY($${params.length}::uuid[]))`;
     }
     const ranked = await pool.query<{ question_id: string; answers: number; correct: number }>(
       `SELECT c.question_id, count(*)::int AS answers, count(*) FILTER (WHERE c.is_correct)::int AS correct
