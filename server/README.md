@@ -239,7 +239,7 @@ Added in PS-TASK-20260925-744, with migration `014_section_roster.sql`.
 - **Real roster files carry student personal data** and never enter this repository. Tests use
   `test/fixtures/synthetic-roster.ts`, whose people are invented.
 
-### Exam practice (ITPEC IT Passport)
+### Exam practice (ITPE level IP, IT Passport)
 
 Added in PS-TASK-20260925-751 (migration `012_practice.sql`, `scripts/import-practice.ts`) and
 PS-TASK-20260925-755 (`routes/practice.ts`). The plan is
@@ -300,7 +300,7 @@ PS-TASK-20260925-755 (`routes/practice.ts`). The plan is
   - **Key lock.** While an assignment is open (status `open`, not past due), students get no key
     for its questions: browse (with `locked: true`), most-missed, practice and quiz draws, and
     reviews. A self mock exam of a session containing them returns `LOCKED_BY_ASSIGNMENT`.
-    Staff are exempt. ITPEC papers are public, so this is in-app deterrence.
+    Staff are exempt. ITPE papers are published openly by ITPEC, so this is in-app deterrence.
   - **Pass estimate:** only for an attempt covering a whole paper (`item_count` questions), not
     for a drawn set.
   - **Results and gradebook sync** (PS-TASK-20260926-789, migration

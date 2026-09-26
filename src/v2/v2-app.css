@@ -171,6 +171,9 @@
   /* Wide tables scroll inside their own box rather than squeezing every column. */
   .v2-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .v2-table th, .v2-table td { padding: 10px 14px; white-space: nowrap; }
+  /* A narrow label/value table (stage scores) wraps its label instead of scrolling the value away. */
+  .v2-table.v2-table-wrap { display: table; }
+  .v2-table.v2-table-wrap td:first-child { white-space: normal; }
   .v2-joincode-card { flex-wrap: wrap; }
   /* Tap targets: at least 40px tall for anything a thumb presses. min-height still applies when
      a component sets its own inline padding. */
@@ -298,6 +301,75 @@
 .v2-choice.is-correct, .v2-pill-option.is-correct { border-color: var(--v2-success-fg); background: var(--v2-success-bg); }
 .v2-choice.is-wrong, .v2-pill-option.is-wrong { border-color: var(--v2-error-fg); background: var(--v2-error-bg); }
 .v2-choice-mark { flex: none; }
+/* diagram_pick: a data-flow diagram drawn from the item; the button list below it is the control. */
+.v2-dfd {
+  margin: 0 0 10px; padding: 8px; background: var(--v2-bg); border: 1px solid var(--v2-border); border-radius: 10px;
+  overflow-x: auto; overscroll-behavior-x: contain;
+}
+/* Below ~460px the labels would shrink past legibility, so the drawing scrolls sideways instead. */
+.v2-dfd svg { display: block; width: 100%; min-width: 460px; max-height: 360px; height: auto; }
+.v2-dfd-boundary { stroke: var(--v2-error-fg); stroke-width: 1.5; stroke-dasharray: 6 5; opacity: .7; }
+.v2-dfd-boundary-label { fill: var(--v2-error-fg); font-size: 10px; font-weight: 600; letter-spacing: .03em; }
+.v2-dfd-flow { stroke: var(--v2-ink-muted); stroke-width: 1.5; }
+.v2-dfd-arrowhead { fill: var(--v2-ink-muted); }
+.v2-dfd-flow-label {
+  fill: var(--v2-ink-muted); font-size: 9px; text-anchor: middle; pointer-events: none;
+  paint-order: stroke; stroke: var(--v2-bg); stroke-width: 3px; stroke-linejoin: round;
+}
+.v2-dfd-node { cursor: pointer; }
+.v2-dfd-shape { fill: #fff; stroke: var(--v2-border-strong); stroke-width: 2; }
+.v2-dfd-store-fill { fill: #fff; }
+.v2-dfd-store-line { stroke: var(--v2-ink-muted); stroke-width: 2; }
+.v2-dfd-node-label {
+  fill: var(--v2-ink); font-size: 12px; font-weight: 700; text-anchor: middle; pointer-events: none;
+  paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round;
+}
+.v2-dfd-node:hover .v2-dfd-shape, .v2-dfd-node:hover .v2-dfd-store-line { stroke: var(--v2-primary); }
+.v2-dfd-node.is-selected .v2-dfd-shape { fill: var(--v2-primary-tint); stroke: var(--v2-primary); }
+.v2-dfd-node.is-selected .v2-dfd-store-line { stroke: var(--v2-primary); }
+.v2-dfd-node.is-selected .v2-dfd-store-fill { fill: var(--v2-primary-tint); }
+.v2-dfd-node.is-correct .v2-dfd-shape { fill: var(--v2-success-bg); stroke: var(--v2-success-fg); }
+.v2-dfd-node.is-correct .v2-dfd-store-line { stroke: var(--v2-success-fg); }
+.v2-dfd-node.is-correct .v2-dfd-store-fill { fill: var(--v2-success-bg); }
+.v2-dfd-node.is-wrong .v2-dfd-shape { fill: var(--v2-error-bg); stroke: var(--v2-error-fg); }
+.v2-dfd-node.is-wrong .v2-dfd-store-line { stroke: var(--v2-error-fg); }
+.v2-dfd-node.is-wrong .v2-dfd-store-fill { fill: var(--v2-error-bg); }
+.v2-dfd-kind { color: var(--v2-ink-muted); font-size: .82rem; }
+.v2-dfd-detail { display: block; margin: 2px 0 0; font-size: .82rem; }
+/* recipe_pipeline: input, operation buttons, ordered steps with a live preview, server result. */
+.v2-recipe-data {
+  margin: 0 0 12px; padding: 10px 12px; background: #0f172a; color: #e2e8f0; border-radius: 10px;
+  font-size: .8rem; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; min-height: 1.5em;
+}
+.v2-recipe-data.is-error { color: #fecaca; }
+.v2-recipe-ops { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.v2-recipe-steps { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.v2-recipe-step { border: 1.5px solid var(--v2-border-strong); border-radius: 10px; padding: 10px 12px; background: #fff; min-width: 0; }
+.v2-recipe-step-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.v2-recipe-step-controls { display: flex; gap: 6px; }
+.v2-recipe-param { display: grid; gap: 4px; margin-top: 8px; font-size: .85rem; }
+.v2-recipe-input { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.v2-recipe-snippet { display: block; margin-top: 8px; font-size: .78rem; color: var(--v2-ink-muted); word-break: break-all; }
+.v2-recipe-snippet.is-error { color: var(--v2-error-fg); }
+.v2-recipe-result { border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; border: 1.5px solid var(--v2-success-fg); background: var(--v2-success-bg); }
+.v2-recipe-result.is-fail { border-color: var(--v2-error-fg); background: var(--v2-error-bg); }
+.v2-recipe-solution ol { margin: 0 0 12px; padding-left: 20px; font-size: .88rem; }
+.v2-recipe-solution code { font-size: .8rem; word-break: break-all; }
+/* policy_builder: two checkbox groups, then (after reveal) one card per fixture request. */
+.v2-policy-group { margin-bottom: 14px; }
+.v2-policy-note { display: block; margin: 4px 0 0; font-size: .82rem; color: var(--v2-error-fg); }
+.v2-policy-results ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.v2-policy-results li {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+  border: 1.5px solid var(--v2-success-fg); background: var(--v2-success-bg); font-size: .88rem; line-height: 1.5;
+}
+.v2-policy-results li.is-fail { border-color: var(--v2-error-fg); background: var(--v2-error-bg); }
+.v2-policy-results li > span:last-child { min-width: 0; }
+.v2-policy-icon { flex: none; font-weight: 700; }
+.v2-policy-pill {
+  display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px; background: #fff;
+  border: 1px solid var(--v2-border-strong); font-size: .78rem; font-weight: 600;
+}
 .v2-row-part { margin-bottom: 12px; }
 .v2-row-label { font-size: .9rem; margin-bottom: 6px; }
 .v2-row-part .v2-pill-group { flex-wrap: wrap; }

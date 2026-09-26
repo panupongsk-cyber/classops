@@ -13,10 +13,10 @@
  * server. This file holds no activity content; packages are imported at runtime.
  */
 
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 
 export const FORMAT = "ps-activity-package/v1";
-export const SCORER_VERSION = "activity-engine/0.1.0";
+export const SCORER_VERSION = "activity-engine/0.4.0";
 export const LANGS = ["th", "en"] as const;
 export type Lang = (typeof LANGS)[number];
 export const PART_TYPES = [
@@ -27,7 +27,164 @@ export const PART_TYPES = [
   "ordering",
   "select_then_tag",
   "matrix_multi",
+  "diagram_pick",
+  "policy_builder",
+  "recipe_pipeline",
 ] as const;
+export const DIAGRAM_NODE_KINDS = ["entity", "process", "store"] as const;
+export const PREDICATE_OPS = ["eq", "eq_attr", "ne_attr", "between"] as const;
+
+// ---------------------------------------------------------------------------
+// recipe_pipeline operations (CyberChef Puzzle Lab)
+// ---------------------------------------------------------------------------
+
+/** Every recipe operation and its parameter names, in order. */
+export const RECIPE_OPS = {
+  fromBase64: [],
+  toBase64: [],
+  fromHex: [],
+  toHex: [],
+  xor: ["key"],
+  sha256: [],
+  aesDecrypt: ["key", "iv"],
+} as const satisfies Record<string, readonly string[]>;
+export type RecipeOp = keyof typeof RECIPE_OPS;
+export const RECIPE_MAX_STEPS = 10;
+export const RECIPE_MAX_PARAM = 256;
+export const RECIPE_MAX_DATA = 65536;
+export interface RecipeStep {
+  op: RecipeOp;
+  params: Record<string, string>;
+}
+const isRecipeOp = (v: unknown): v is RecipeOp => typeof v === "string" && Object.prototype.hasOwnProperty.call(RECIPE_OPS, v);
+
+/**
+ * The game's converters (cyberchef-puzzle-lab/game-core.js), browser branch, on JS strings of
+ * char codes: fromHex's parseInt (a non-hex pair becomes "\0"), xor's "0x" single-byte rule,
+ * atob/btoa, and WHATWG TextEncoder/TextDecoder, never Buffer strings. Must stay identical to the
+ * reference engine and to the player's preview library (src/v2/activities/recipeOps.js).
+ */
+function rFromHex(hexStr: string): string {
+  const cleanHex = hexStr.replace(/(0x|[\s,;:]+)/g, "");
+  if (cleanHex.length % 2 !== 0) return "[ERROR: Hex length must be even]";
+  try {
+    let str = "";
+    for (let i = 0; i < cleanHex.length; i += 2) str += String.fromCharCode(parseInt(cleanHex.substring(i, i + 2), 16));
+    return str;
+  } catch {
+    return "[ERROR: Invalid Hex input]";
+  }
+}
+function rToHex(str: string): string {
+  let hex = "";
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i).toString(16);
+    hex += (code.length === 1 ? "0" + code : code) + " ";
+  }
+  return hex.trim();
+}
+function rFromBase64(base64Str: string): string {
+  try {
+    return atob(base64Str.trim().replace(/\s+/g, ""));
+  } catch {
+    return "[ERROR: Invalid Base64 input]";
+  }
+}
+function rToBase64(str: string): string {
+  try {
+    return btoa(str);
+  } catch {
+    return "[ERROR: Cannot encode Base64]";
+  }
+}
+function rXor(str: string, key: string): string {
+  if (!key) return str;
+  let keyBytes: number[] = [];
+  if (key.startsWith("0x")) {
+    const hexVal = parseInt(key.slice(2), 16);
+    keyBytes = isNaN(hexVal) ? [] : [hexVal];
+  } else {
+    for (let i = 0; i < key.length; i++) keyBytes.push(key.charCodeAt(i));
+  }
+  if (keyBytes.length === 0) return str;
+  let result = "";
+  for (let i = 0; i < str.length; i++) result += String.fromCharCode(str.charCodeAt(i) ^ keyBytes[i % keyBytes.length]!);
+  return result;
+}
+function rSha256(str: string): string {
+  return createHash("sha256").update(new TextEncoder().encode(str)).digest("hex");
+}
+function rAesDecrypt(ciphertextBase64: string, keyStr: string, ivStr: string): string {
+  const encoder = new TextEncoder();
+  const keyBytes = encoder.encode(keyStr);
+  const ivBytes = encoder.encode(ivStr);
+  if (keyBytes.byteLength !== 32) return `[ERROR: AES-256-CBC key must be exactly 32 UTF-8 bytes; received ${keyBytes.byteLength}]`;
+  if (ivBytes.byteLength !== 16) return `[ERROR: AES-CBC IV must be exactly 16 UTF-8 bytes; received ${ivBytes.byteLength}]`;
+  try {
+    const cipherBinary = rFromBase64(ciphertextBase64);
+    const cipherBytes = new Uint8Array(cipherBinary.length);
+    for (let i = 0; i < cipherBinary.length; i++) cipherBytes[i] = cipherBinary.charCodeAt(i);
+    const decipher = createDecipheriv("aes-256-cbc", keyBytes, ivBytes);
+    const plain = new Uint8Array([...decipher.update(cipherBytes), ...decipher.final()]);
+    return new TextDecoder().decode(plain);
+  } catch {
+    return "[ERROR: Decryption Failed. Check Key/IV parameters]";
+  }
+}
+function applyRecipeStep(data: string, step: RecipeStep): string {
+  const p = step.params;
+  switch (step.op) {
+    case "fromBase64":
+      return rFromBase64(data);
+    case "toBase64":
+      return rToBase64(data);
+    case "fromHex":
+      return rFromHex(data);
+    case "toHex":
+      return rToHex(data);
+    case "xor":
+      return rXor(data, p.key ?? "");
+    case "sha256":
+      return rSha256(data);
+    case "aesDecrypt":
+      return rAesDecrypt(data, p.key ?? "", p.iv ?? "");
+  }
+}
+
+/**
+ * Run a recipe the way the game's compilePipeline does: stop at the first step whose output
+ * starts with "[ERROR" and return it. A step output over RECIPE_MAX_DATA characters becomes an
+ * error too (the game has no cap).
+ */
+export function runRecipe(input: string, steps: readonly RecipeStep[]): string {
+  let data = input;
+  for (const step of steps) {
+    data = applyRecipeStep(data, step);
+    if (data.length > RECIPE_MAX_DATA) data = `[ERROR: Step output exceeds ${RECIPE_MAX_DATA} characters]`;
+    if (data.startsWith("[ERROR")) return data;
+  }
+  return data;
+}
+
+/** A recipe's steps as {op, params}; throws `fail(message)` on anything out of bounds. */
+function checkRecipe(raw: unknown, allowedOps: Set<string>, fail: (m: string) => Error): RecipeStep[] {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > RECIPE_MAX_STEPS) throw fail(`must be a list of 1 to ${RECIPE_MAX_STEPS} steps`);
+  return raw.map((step: unknown, i: number) => {
+    if (!isObject(step) || !isRecipeOp(step.op) || !allowedOps.has(step.op)) throw fail(`step ${i + 1}: unknown operation`);
+    const op = step.op;
+    const names: readonly string[] = RECIPE_OPS[op];
+    const params = step.params === undefined && names.length === 0 ? {} : step.params;
+    if (!isObject(params)) throw fail(`step ${i + 1}: params must be an object`);
+    for (const k of Object.keys(step)) if (k !== "op" && k !== "params") throw fail(`step ${i + 1}: unknown field ${k}`);
+    const keys = Object.keys(params);
+    if (keys.length !== names.length || names.some((n) => !keys.includes(n))) throw fail(`step ${i + 1}: params must be exactly ${names.join(", ") || "none"}`);
+    for (const n of names) {
+      const v = params[n];
+      if (typeof v !== "string" || v.length > RECIPE_MAX_PARAM) throw fail(`step ${i + 1}: ${n} must be a string of at most ${RECIPE_MAX_PARAM} characters`);
+    }
+    return { op, params: Object.fromEntries(names.map((n) => [n, params[n] as string])) };
+  });
+}
 export const ORDERING_MODES = ["positional", "exact"] as const;
 export const RULE_TYPES = ["zero_if_selected", "zero_if_row_value", "select_minimums"] as const;
 export const AGGREGATES = ["stage_mean", "item_mean"] as const;
@@ -58,7 +215,8 @@ export type MultiScoring =
   | { mode: "credit_by_correct"; key: string[]; credit: number[] }
   | { mode: "share_of_allowed"; allowed: string[] }
   | { mode: "exact_set"; key: string[] }
-  | { mode: "threshold_no_wrong"; key: string[]; threshold: number; partial_factor: number };
+  | { mode: "threshold_no_wrong"; key: string[]; threshold: number; partial_factor: number }
+  | { mode: "accepted_sets"; sets: string[][] };
 export interface MultiSelectPart extends PartBase {
   type: "multi_select";
   shuffle: boolean;
@@ -100,7 +258,58 @@ export interface MatrixMultiPart extends PartBase {
   dimensions: { key: string; label: LocalizedText; options: Choice[] }[];
   answer_key: Record<string, Record<string, string[]>>;
 }
-export type Part = SingleChoicePart | MultiSelectPart | RowPart | OrderingPart | SelectThenTagPart | MatrixMultiPart;
+/** Pick one node on a data-flow diagram; positions are in `view_box` units. */
+export interface DiagramPickPart extends PartBase {
+  type: "diagram_pick";
+  diagram: {
+    view_box: [number, number];
+    nodes: { id: string; label: LocalizedText; kind: (typeof DIAGRAM_NODE_KINDS)[number]; x: number; y: number; detail?: LocalizedText }[];
+    flows?: { id?: string; from: string; to: string; label: LocalizedText }[];
+    boundaries?: { id?: string; label: LocalizedText; x1: number; y1: number; x2: number; y2: number }[];
+  };
+  answer_key: string;
+}
+type Primitive = string | number | boolean;
+/** A JSON predicate over a request's attributes; any attribute it names that is absent makes it false. */
+export type Predicate =
+  | { op: "eq"; attr: string; value: Primitive }
+  | { op: "eq_attr"; attr: string; other: string }
+  | { op: "ne_attr"; attr: string; other: string }
+  | { op: "between"; attr: string; min: number; max: number };
+/**
+ * Pick permissions (RBAC) and context conditions (ABAC); the server evaluates the picked policy
+ * against fixture requests. A request is allowed when its permission is picked and every picked
+ * condition that `applies` to that permission holds.
+ */
+export interface PolicyBuilderPart extends PartBase {
+  type: "policy_builder";
+  shuffle: boolean;
+  permissions_prompt?: LocalizedText;
+  conditions_prompt?: LocalizedText;
+  permissions: { id: string; label: LocalizedText; detail?: LocalizedText; note?: LocalizedText }[];
+  conditions: { id: string; label: LocalizedText; detail?: LocalizedText; note?: LocalizedText; applies: string[]; predicate: Predicate }[];
+  answer_key: { permissions: string[]; conditions: string[] };
+  requests: { id: string; title: LocalizedText; reason?: LocalizedText; permission: string; attrs: Record<string, Primitive>; expected: boolean }[];
+  scoring: { choice_weight: number; test_weight: number };
+}
+export type Part =
+  | SingleChoicePart
+  | MultiSelectPart
+  | RowPart
+  | OrderingPart
+  | SelectThenTagPart
+  | MatrixMultiPart
+  | DiagramPickPart
+  | PolicyBuilderPart
+  | RecipePipelinePart;
+/** Build a recipe of library operations; the server runs it on `input` and compares with `target`. */
+export interface RecipePipelinePart extends PartBase {
+  type: "recipe_pipeline";
+  input: string;
+  target: string;
+  operations: { id: RecipeOp; label: LocalizedText; detail?: LocalizedText; params: { key: string; label: LocalizedText; placeholder?: LocalizedText }[] }[];
+  solution: { op: RecipeOp; params?: Record<string, string> }[];
+}
 export type Rule =
   | { type: "zero_if_selected"; part: string; options: string[]; flag: string }
   | { type: "zero_if_row_value"; part: string; row: string; category: string; flag: string }
@@ -112,6 +321,8 @@ export interface Item {
   evidence?: { tag?: LocalizedText; body: LocalizedText };
   context?: { label: LocalizedText; value: LocalizedText }[];
   explanation?: LocalizedText;
+  /** Score 1 only when every part is fully right, else 0. */
+  all_correct?: boolean;
   parts: Part[];
   rules?: Rule[];
 }
@@ -388,6 +599,9 @@ function validateItem(
     });
   }
 
+  // `all_correct: true` scores the item 1 only when every part is fully right, else 0
+  // (STRIDE's checkpoints and DFD events are all-or-nothing in the source game).
+  if (item.all_correct !== undefined && typeof item.all_correct !== "boolean") err(`${ip}.all_correct`, "must be boolean");
   const parts = Array.isArray(item.parts) ? (item.parts as unknown[]) : [];
   if (parts.length === 0) return err(`${ip}.parts`, "must be a non-empty array");
   const partsByKey = new Map<string, Json>();
@@ -407,7 +621,40 @@ function validateItem(
     const labels = (list: unknown, lp: string) =>
       (Array.isArray(list) ? list : []).forEach((o: unknown, oi: number) => text(`${lp}[${oi}].label`, isObject(o) ? o.label : undefined));
 
-    if (part.type === "select_then_tag") {
+    if (part.type === "recipe_pipeline") {
+      validateRecipePart(part, pp, err, text);
+    } else if (part.type === "policy_builder") {
+      validatePolicyPart(part, pp, err, text);
+    } else if (part.type === "diagram_pick") {
+      const d = isObject(part.diagram) ? part.diagram : {};
+      const vb = d.view_box;
+      if (!Array.isArray(vb) || vb.length !== 2 || vb.some((n) => typeof n !== "number" || !(n > 0))) {
+        err(`${pp}.diagram.view_box`, "must be [width, height] with positive numbers");
+      }
+      const nodeIds = uniqueIds(d.nodes, `${pp}.diagram.nodes`, err, "nodes");
+      if (nodeIds.size < 2) err(`${pp}.diagram.nodes`, "needs at least 2 nodes");
+      (Array.isArray(d.nodes) ? d.nodes : []).forEach((raw: unknown, ni: number) => {
+        const np = `${pp}.diagram.nodes[${ni}]`;
+        const n = isObject(raw) ? raw : {};
+        text(`${np}.label`, n.label);
+        text(`${np}.detail`, n.detail, false);
+        if (!(DIAGRAM_NODE_KINDS as readonly unknown[]).includes(n.kind)) err(`${np}.kind`, `must be one of ${DIAGRAM_NODE_KINDS.join(", ")}`);
+        if (typeof n.x !== "number" || typeof n.y !== "number") err(np, "x and y must be numbers");
+      });
+      (Array.isArray(d.flows) ? d.flows : []).forEach((raw: unknown, fi: number) => {
+        const fp = `${pp}.diagram.flows[${fi}]`;
+        const f = isObject(raw) ? raw : {};
+        if (!nodeIds.has(f.from as string) || !nodeIds.has(f.to as string)) err(fp, "from and to must be node ids");
+        text(`${fp}.label`, f.label);
+      });
+      (Array.isArray(d.boundaries) ? d.boundaries : []).forEach((raw: unknown, bi: number) => {
+        const bp = `${pp}.diagram.boundaries[${bi}]`;
+        const b = isObject(raw) ? raw : {};
+        text(`${bp}.label`, b.label);
+        if (["x1", "y1", "x2", "y2"].some((k) => typeof b[k] !== "number")) err(bp, "x1, y1, x2, y2 must be numbers");
+      });
+      if (typeof part.answer_key !== "string" || !nodeIds.has(part.answer_key)) err(`${pp}.answer_key`, "must be one of the node ids");
+    } else if (part.type === "select_then_tag") {
       const ids = uniqueIds(part.options, `${pp}.options`, err, "options");
       labels(part.options, `${pp}.options`);
       const tagIds = uniqueIds(part.tags, `${pp}.tags`, err, "tags");
@@ -538,6 +785,154 @@ function validateItem(
   });
 }
 
+function validateRecipePart(
+  part: Json,
+  pp: string,
+  err: (p: string, m: string) => void,
+  text: (p: string, v: unknown, required?: boolean) => void,
+) {
+  if (typeof part.input !== "string" || part.input.length > RECIPE_MAX_DATA) err(`${pp}.input`, "must be a string");
+  if (typeof part.target !== "string" || part.target.length === 0) err(`${pp}.target`, "must be a non-empty string");
+  const opIds = uniqueIds(part.operations, `${pp}.operations`, err, "operations") as Set<string>;
+  (Array.isArray(part.operations) ? part.operations : []).forEach((raw: unknown, oi: number) => {
+    const op = `${pp}.operations[${oi}]`;
+    const o = isObject(raw) ? raw : {};
+    text(`${op}.label`, o.label);
+    text(`${op}.detail`, o.detail, false);
+    if (!isRecipeOp(o.id)) return err(`${op}.id`, `must be one of ${Object.keys(RECIPE_OPS).join(", ")}`);
+    const names: readonly string[] = RECIPE_OPS[o.id];
+    const params = Array.isArray(o.params) ? (o.params as unknown[]) : [];
+    if (!Array.isArray(o.params) || params.map((x) => (isObject(x) ? x.key : undefined)).join(",") !== names.join(",")) {
+      err(`${op}.params`, `must list exactly ${names.join(", ") || "no parameters"}, in order`);
+    }
+    params.forEach((x, xi) => {
+      text(`${op}.params[${xi}].label`, isObject(x) ? x.label : undefined);
+      text(`${op}.params[${xi}].placeholder`, isObject(x) ? x.placeholder : undefined, false);
+    });
+  });
+  let solution: RecipeStep[];
+  try {
+    solution = checkRecipe(part.solution, opIds, (m) => new Error(m));
+  } catch (e) {
+    return err(`${pp}.solution`, (e as Error).message);
+  }
+  if (typeof part.input === "string" && typeof part.target === "string" && runRecipe(part.input, solution).trim() !== part.target) {
+    err(`${pp}.solution`, "does not reach the target");
+  }
+}
+
+const isPrimitive = (v: unknown): v is Primitive =>
+  typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v));
+
+function validatePolicyPart(
+  part: Json,
+  pp: string,
+  err: (p: string, m: string) => void,
+  text: (p: string, v: unknown, required?: boolean) => void,
+) {
+  if (typeof part.shuffle !== "boolean") err(`${pp}.shuffle`, "must be boolean");
+  text(`${pp}.permissions_prompt`, part.permissions_prompt, false);
+  text(`${pp}.conditions_prompt`, part.conditions_prompt, false);
+  const permIds = uniqueIds(part.permissions, `${pp}.permissions`, err, "permissions");
+  const conds = Array.isArray(part.conditions) ? (part.conditions as unknown[]) : [];
+  if (!Array.isArray(part.conditions)) err(`${pp}.conditions`, "must be an array");
+  const condIds = new Set<unknown>();
+  conds.forEach((raw, ci) => {
+    const cp = `${pp}.conditions[${ci}]`;
+    const c = isObject(raw) ? raw : {};
+    const id = typeof c.id === "string" ? c.id : "";
+    if (!KEY_RE.test(id)) err(`${cp}.id`, "bad id");
+    else if (condIds.has(id) || permIds.has(id)) err(`${cp}.id`, `duplicate id ${id}`);
+    condIds.add(c.id);
+    text(`${cp}.label`, c.label);
+    text(`${cp}.detail`, c.detail, false);
+    text(`${cp}.note`, c.note, false);
+    const applies = c.applies;
+    if (!Array.isArray(applies) || applies.length === 0 || applies.some((a) => !permIds.has(a as string)) || new Set(applies).size !== applies.length) {
+      err(`${cp}.applies`, "must be a non-empty set of permission ids");
+    }
+    validatePredicate(c.predicate, `${cp}.predicate`, err);
+  });
+  (Array.isArray(part.permissions) ? part.permissions : []).forEach((raw: unknown, oi: number) => {
+    const o = isObject(raw) ? raw : {};
+    text(`${pp}.permissions[${oi}].label`, o.label);
+    text(`${pp}.permissions[${oi}].detail`, o.detail, false);
+    text(`${pp}.permissions[${oi}].note`, o.note, false);
+  });
+  const key = isObject(part.answer_key) ? part.answer_key : {};
+  const subset = (list: unknown, ids: Set<unknown>, kp: string) => {
+    if (!Array.isArray(list) || list.some((x) => !ids.has(x)) || new Set(list).size !== list.length) err(kp, "must be a set of this part's ids");
+  };
+  subset(key.permissions, permIds, `${pp}.answer_key.permissions`);
+  subset(key.conditions, condIds, `${pp}.answer_key.conditions`);
+  const requests = Array.isArray(part.requests) ? (part.requests as unknown[]) : [];
+  if (requests.length === 0) err(`${pp}.requests`, "must be a non-empty array of requests");
+  const reqIds = new Set<string>();
+  requests.forEach((raw, ri) => {
+    const rp = `${pp}.requests[${ri}]`;
+    const r = isObject(raw) ? raw : {};
+    const id = typeof r.id === "string" ? r.id : "";
+    if (!KEY_RE.test(id)) err(`${rp}.id`, "bad id");
+    else if (reqIds.has(id)) err(`${rp}.id`, `duplicate id ${id}`);
+    reqIds.add(id);
+    text(`${rp}.title`, r.title);
+    text(`${rp}.reason`, r.reason, false);
+    if (!permIds.has(r.permission as string)) err(`${rp}.permission`, "must be one of the permission ids");
+    if (typeof r.expected !== "boolean") err(`${rp}.expected`, "must be boolean");
+    const attrs = r.attrs;
+    if (!isObject(attrs) || Object.entries(attrs).some(([k, v]) => !KEY_RE.test(k) || !isPrimitive(v))) {
+      err(`${rp}.attrs`, "must map attribute names to strings, numbers, or booleans");
+    }
+  });
+  const sc = isObject(part.scoring) ? part.scoring : {};
+  const cw = sc.choice_weight;
+  const tw = sc.test_weight;
+  if (typeof cw !== "number" || cw < 0 || typeof tw !== "number" || tw < 0 || Math.abs(cw + tw - 1) > 1e-9) {
+    err(`${pp}.scoring`, "choice_weight and test_weight must be non-negative and sum to 1");
+  }
+}
+
+function validatePredicate(raw: unknown, path: string, err: (p: string, m: string) => void) {
+  const p = isObject(raw) ? raw : undefined;
+  if (!p || !(PREDICATE_OPS as readonly unknown[]).includes(p.op)) return err(`${path}.op`, `must be one of ${PREDICATE_OPS.join(", ")}`);
+  if (typeof p.attr !== "string" || !KEY_RE.test(p.attr)) err(`${path}.attr`, "bad attribute name");
+  if (p.op === "eq" && !isPrimitive(p.value)) err(`${path}.value`, "must be a string, number, or boolean");
+  if ((p.op === "eq_attr" || p.op === "ne_attr") && (typeof p.other !== "string" || !KEY_RE.test(p.other))) err(`${path}.other`, "bad attribute name");
+  if (p.op === "between" && !(typeof p.min === "number" && typeof p.max === "number" && p.min <= p.max)) {
+    err(path, "min and max must be numbers with min <= max");
+  }
+}
+
+function predicateHolds(p: Predicate, attrs: Record<string, Primitive>): boolean {
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(attrs, k);
+  if (!has(p.attr)) return false;
+  const v = attrs[p.attr];
+  if (p.op === "eq") return v === p.value;
+  if (p.op === "eq_attr") return has(p.other) && v === attrs[p.other];
+  if (p.op === "ne_attr") return has(p.other) && v !== attrs[p.other];
+  return typeof v === "number" && v >= p.min && v <= p.max;
+}
+
+/** Per-request decisions of a picked policy, the wrongly decided choice ids, and the part ratio. */
+function policyOutcome(part: PolicyBuilderPart, value: PolicyPicks) {
+  const allowed = part.requests.map(
+    (r) =>
+      value.permissions.has(r.permission) &&
+      part.conditions.every((c) => !value.conditions.has(c.id) || !c.applies.includes(r.permission) || predicateHolds(c.predicate, r.attrs)),
+  );
+  const keyP = new Set(part.answer_key.permissions);
+  const keyC = new Set(part.answer_key.conditions);
+  const wrong = [
+    ...part.permissions.filter((o) => value.permissions.has(o.id) !== keyP.has(o.id)),
+    ...part.conditions.filter((c) => value.conditions.has(c.id) !== keyC.has(c.id)),
+  ].map((o) => o.id);
+  const choices = part.permissions.length + part.conditions.length;
+  const passed = allowed.filter((a, i) => a === part.requests[i]!.expected).length;
+  const ratio =
+    part.scoring.choice_weight * ((choices - wrong.length) / choices) + part.scoring.test_weight * (passed / part.requests.length);
+  return { ratio, allowed, wrong };
+}
+
 function validateMultiScoring(part: Json, pp: string, ids: Set<string>, err: (p: string, m: string) => void) {
   const s = isObject(part.scoring) ? part.scoring : {};
   if (s.mode === "credit_by_correct") {
@@ -575,8 +970,25 @@ function validateMultiScoring(part: Json, pp: string, ids: Set<string>, err: (p:
     if (typeof factor !== "number" || factor < 0 || factor > 1) {
       err(`${pp}.scoring.partial_factor`, "must be a number in [0, 1]");
     }
+  } else if (s.mode === "accepted_sets") {
+    // Full credit when the selection equals one of the listed sets exactly, else 0 (CIA's DDoS
+    // console: several tool combinations bring both meters under the limit).
+    const sets = Array.isArray(s.sets) ? (s.sets as unknown[]) : [];
+    if (sets.length === 0) return err(`${pp}.scoring.sets`, "must be a non-empty list of option-id sets");
+    const seen = new Set<string>();
+    sets.forEach((set, si) => {
+      if (!Array.isArray(set) || set.length === 0 || set.some((k) => !ids.has(k)) || new Set(set).size !== set.length) {
+        return err(`${pp}.scoring.sets[${si}]`, "must be a non-empty set of option ids");
+      }
+      const sig = [...(set as string[])].sort().join("\u0000");
+      if (seen.has(sig)) err(`${pp}.scoring.sets[${si}]`, "duplicates another set");
+      seen.add(sig);
+      if (set.length < (part.min as number) || (part.max !== null && set.length > (part.max as number))) {
+        err(`${pp}.scoring.sets[${si}]`, "must fit within min and max");
+      }
+    });
   } else {
-    err(`${pp}.scoring.mode`, "must be credit_by_correct, share_of_allowed, exact_set, or threshold_no_wrong");
+    err(`${pp}.scoring.mode`, "must be credit_by_correct, share_of_allowed, exact_set, threshold_no_wrong, or accepted_sets");
   }
 }
 
@@ -596,7 +1008,27 @@ export interface ProjectedPart {
   tags?: { id: string; label: string | undefined }[];
   tag_prompt?: string;
   dimensions?: { key: string; label: string | undefined; options: { id: string; label: string | undefined }[] }[];
+  diagram?: {
+    view_box: [number, number];
+    nodes: { token: string; label: string | undefined; kind: string; x: number; y: number; detail?: string }[];
+    flows: { from: string; to: string; label: string | undefined }[];
+    boundaries: { label: string | undefined; x1: number; y1: number; x2: number; y2: number }[];
+  };
+  permissions_prompt?: string;
+  conditions_prompt?: string;
+  permissions?: ProjectedChoice[];
+  conditions?: ProjectedChoice[];
+  input?: string;
+  max_steps?: number;
+  max_param?: number;
+  operations?: {
+    id: string;
+    label: string | undefined;
+    detail?: string;
+    params: { key: string; label: string | undefined; placeholder?: string }[];
+  }[];
 }
+type ProjectedChoice = { token: string; label: string | undefined; detail?: string };
 export interface ProjectedItem {
   key: string;
   stage: string;
@@ -635,6 +1067,58 @@ export function projectItem(pkg: ActivityPackage, itemKey: string, seed: string,
         p.min = part.min;
         p.max = part.max;
       }
+    } else if (part.type === "recipe_pipeline") {
+      // The level input and the operation library; the target and the solution stay on the server.
+      p.input = part.input;
+      p.max_steps = RECIPE_MAX_STEPS;
+      p.max_param = RECIPE_MAX_PARAM;
+      p.operations = part.operations.map((o) => {
+        // Same key order as the reference engine (id, label, detail?, params).
+        const detail = o.detail ? L(o.detail) : undefined;
+        const params = o.params.map((x) => {
+          const q: { key: string; label: string | undefined; placeholder?: string } = { key: x.key, label: L(x.label) };
+          const ph = x.placeholder ? L(x.placeholder) : undefined;
+          if (ph !== undefined) q.placeholder = ph;
+          return q;
+        });
+        return detail === undefined ? { id: o.id, label: L(o.label), params } : { id: o.id, label: L(o.label), detail, params };
+      });
+    } else if (part.type === "policy_builder") {
+      // Requests, predicates, `applies`, notes, and the key stay on the server.
+      const choice = (o: { id: string; label: LocalizedText; detail?: LocalizedText }): ProjectedChoice => {
+        const c: ProjectedChoice = { token: optionToken(seed, item.key, part.key, o.id), label: L(o.label) };
+        const detail = o.detail ? L(o.detail) : undefined;
+        if (detail !== undefined) c.detail = detail;
+        return c;
+      };
+      const pp = part.permissions_prompt ? L(part.permissions_prompt) : undefined;
+      if (pp !== undefined) p.permissions_prompt = pp;
+      const cp = part.conditions_prompt ? L(part.conditions_prompt) : undefined;
+      if (cp !== undefined) p.conditions_prompt = cp;
+      p.permissions = seededOrder(seed, "order", item.key, part.key, part.permissions, part.shuffle).map(choice);
+      p.conditions = seededOrder(seed, "condorder", item.key, part.key, part.conditions, part.shuffle).map(choice);
+    } else if (part.type === "diagram_pick") {
+      // Node ids can name the answer ("payments_db"), so nodes travel as tokens; flows refer
+      // to those tokens. The diagram's own layout (positions) is kept, as in the source game.
+      const tok = (id: string) => optionToken(seed, item.key, part.key, id);
+      const d = part.diagram;
+      p.diagram = {
+        view_box: [d.view_box[0], d.view_box[1]],
+        nodes: d.nodes.map((n) => {
+          const node: { token: string; label: string | undefined; kind: string; x: number; y: number; detail?: string } = {
+            token: tok(n.id),
+            label: L(n.label),
+            kind: n.kind,
+            x: n.x,
+            y: n.y,
+          };
+          const detail = n.detail ? L(n.detail) : undefined;
+          if (detail !== undefined) node.detail = detail;
+          return node;
+        }),
+        flows: (d.flows ?? []).map((f) => ({ from: tok(f.from), to: tok(f.to), label: L(f.label) })),
+        boundaries: (d.boundaries ?? []).map((b) => ({ label: L(b.label), x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 })),
+      };
     } else if (part.type === "select_then_tag") {
       p.options = orderedOptions(seed, item.key, part).map((o) => ({
         token: optionToken(seed, item.key, part.key, o.id),
@@ -691,10 +1175,42 @@ interface TaggedPicks {
   tags: Record<string, string>;
 }
 type MatrixPicks = Record<string, Record<string, Set<string>>>;
-type PartValue = string | string[] | Set<string> | Record<string, string> | TaggedPicks | MatrixPicks;
+interface PolicyPicks {
+  permissions: Set<string>;
+  conditions: Set<string>;
+}
+type PartValue = string | string[] | Set<string> | Record<string, string> | TaggedPicks | MatrixPicks | PolicyPicks | RecipeStep[];
 
 function normalizePart(seed: string, itemKey: string, part: Part, raw: unknown): PartValue {
   const where = `${itemKey}.${part.key}`;
+  if (part.type === "recipe_pipeline") {
+    // [{op, params}]; op ids are the public library names, so no tokens are needed.
+    return checkRecipe(raw, new Set(part.operations.map((o) => o.id)), (m) => new ActivityAnswerError(`${where}: ${m}`));
+  }
+  if (part.type === "policy_builder") {
+    // {permissions: [token], conditions: [token]}; either list may be empty, as in the game.
+    if (!isObject(raw) || !Array.isArray(raw.permissions) || !Array.isArray(raw.conditions)) {
+      throw new ActivityAnswerError(`${where}: must be {permissions, conditions}`);
+    }
+    for (const k of Object.keys(raw)) if (k !== "permissions" && k !== "conditions") throw new ActivityAnswerError(`${where}: unknown field ${k}`);
+    const pick = (list: unknown[], choices: { id: string }[], what: string) => {
+      const byToken = new Map(choices.map((o) => [optionToken(seed, itemKey, part.key, o.id), o.id]));
+      const ids = new Set<string>();
+      for (const t of list) {
+        const id = typeof t === "string" ? byToken.get(t) : undefined;
+        if (id === undefined) throw new ActivityAnswerError(`${where}: not a ${what} of this part`);
+        ids.add(id);
+      }
+      return ids;
+    };
+    return { permissions: pick(raw.permissions, part.permissions, "permission"), conditions: pick(raw.conditions, part.conditions, "condition") };
+  }
+  if (part.type === "diagram_pick") {
+    const byToken = new Map(part.diagram.nodes.map((n) => [optionToken(seed, itemKey, part.key, n.id), n.id]));
+    const id = typeof raw === "string" ? byToken.get(raw) : undefined;
+    if (id === undefined) throw new ActivityAnswerError(`${where}: not a node of this diagram`);
+    return id;
+  }
   if (part.type === "select_then_tag") {
     // {selected: [optionToken], tags: {optionToken: tagId}}; every pick tagged, nothing else tagged.
     if (!isObject(raw) || !Array.isArray(raw.selected) || !isObject(raw.tags)) {
@@ -805,7 +1321,9 @@ function cellScore(sel: Set<string>, accepted: string[]) {
 }
 
 function partRatio(part: Part, value: PartValue): number {
-  if (part.type === "single_choice") return value === part.answer_key ? 1 : 0;
+  if (part.type === "single_choice" || part.type === "diagram_pick") return value === part.answer_key ? 1 : 0;
+  if (part.type === "policy_builder") return policyOutcome(part, value as PolicyPicks).ratio;
+  if (part.type === "recipe_pipeline") return runRecipe(part.input, value as RecipeStep[]).trim() === part.target ? 1 : 0;
   if (part.type === "select_then_tag") {
     const v = value as TaggedPicks;
     const n = v.selected.length;
@@ -846,6 +1364,9 @@ function partRatio(part: Part, value: PartValue): number {
       if (chosen.size !== s.key.length) return 0;
       for (const k of s.key) if (!chosen.has(k)) return 0;
       return 1;
+    }
+    if (s.mode === "accepted_sets") {
+      return s.sets.some((set) => set.length === chosen.size && set.every((k) => chosen.has(k))) ? 1 : 0;
     }
     if (s.mode === "threshold_no_wrong") {
       // Any pick outside the key scores 0. At least `threshold` correct picks score
@@ -892,6 +1413,8 @@ export interface ItemScore {
   ratio: number;
   flags: string[];
   parts: Record<string, number>;
+  /** policy_builder only: per-request decisions and wrongly decided choice ids (not stored). */
+  details?: Record<string, { allowed: boolean[]; wrong: string[] } | { output: string }>;
 }
 
 /**
@@ -918,21 +1441,51 @@ export function scoreItem(pkg: ActivityPackage, itemKey: string, answer: unknown
     if (ruleFires(rule, values.get(rule.part), rulePart) && !flags.includes(rule.flag)) flags.push(rule.flag);
   }
   const parts: Record<string, number> = {};
+  const details: NonNullable<ItemScore["details"]> = {};
   let ratio = 0;
   for (const part of item.parts) {
-    const r = partRatio(part, values.get(part.key) as PartValue);
+    let r: number;
+    if (part.type === "policy_builder") {
+      const o = policyOutcome(part, values.get(part.key) as PolicyPicks);
+      r = o.ratio;
+      details[part.key] = { allowed: o.allowed, wrong: o.wrong };
+    } else if (part.type === "recipe_pipeline") {
+      // The game compares the trimmed output with the target, exactly.
+      const output = runRecipe(part.input, values.get(part.key) as RecipeStep[]);
+      r = output.trim() === part.target ? 1 : 0;
+      details[part.key] = { output };
+    } else {
+      r = partRatio(part, values.get(part.key) as PartValue);
+    }
     parts[part.key] = r;
     ratio += part.weight * r;
   }
   if (flags.length > 0) ratio = 0;
-  return { ratio: Math.min(1, Math.max(0, ratio)), flags, parts };
+  if (item.all_correct && Object.values(parts).some((r) => r < 1)) ratio = 0;
+  const score: ItemScore = { ratio: Math.min(1, Math.max(0, ratio)), flags, parts };
+  if (Object.keys(details).length > 0) score.details = details;
+  return score;
 }
 
 /** The correct answer of one item, in this attempt's tokens (for reveal). */
 export function correctAnswer(item: Item, seed: string) {
-  const out: Record<string, string | string[] | Record<string, string> | Record<string, Record<string, string[]>>> = {};
+  const out: Record<
+    string,
+    | string
+    | string[]
+    | Record<string, string>
+    | Record<string, Record<string, string[]>>
+    | { permissions: string[]; conditions: string[] }
+    | RecipeStep[]
+  > = {};
   for (const part of item.parts) {
-    if (part.type === "single_choice") out[part.key] = optionToken(seed, item.key, part.key, part.answer_key);
+    if (part.type === "single_choice" || part.type === "diagram_pick") out[part.key] = optionToken(seed, item.key, part.key, part.answer_key);
+    else if (part.type === "recipe_pipeline") {
+      out[part.key] = part.solution.map((st) => ({ op: st.op, params: { ...(st.params ?? {}) } }));
+    } else if (part.type === "policy_builder") {
+      const tok = (id: string) => optionToken(seed, item.key, part.key, id);
+      out[part.key] = { permissions: part.answer_key.permissions.map(tok), conditions: part.answer_key.conditions.map(tok) };
+    }
     else if (part.type === "ordering") out[part.key] = part.options.map((o) => optionToken(seed, item.key, part.key, o.id));
     else if (part.type === "select_then_tag") {
       out[part.key] = Object.fromEntries(part.options.map((o) => [optionToken(seed, item.key, part.key, o.id), part.answer_key[o.id] ?? ""]));
@@ -940,7 +1493,12 @@ export function correctAnswer(item: Item, seed: string) {
       out[part.key] = Object.fromEntries(part.rows.map((r) => [rowToken(seed, item.key, part.key, r.id), { ...part.answer_key[r.id] }]));
     }
     else if (part.type === "multi_select") {
-      const ids = part.scoring.mode === "share_of_allowed" ? part.scoring.allowed : part.scoring.key;
+      const ids =
+        part.scoring.mode === "share_of_allowed"
+          ? part.scoring.allowed
+          : part.scoring.mode === "accepted_sets"
+            ? (part.scoring.sets[0] ?? [])
+            : part.scoring.key;
       out[part.key] = ids.map((id) => optionToken(seed, item.key, part.key, id));
     } else {
       out[part.key] = Object.fromEntries(
@@ -966,6 +1524,7 @@ export function itemFeedback(
     flags: { key: string; title: string | undefined; body: string | undefined }[];
     explanation?: string;
     correct?: ReturnType<typeof correctAnswer>;
+    details?: Record<string, PolicyFeedback | RecipeFeedback>;
   } = {
     ratio: result.ratio,
     flags: result.flags.map((f) => ({
@@ -976,8 +1535,62 @@ export function itemFeedback(
   };
   const explanation = localize(item.explanation, lang);
   if (explanation !== undefined) out.explanation = explanation;
-  if (revealNow) out.correct = correctAnswer(item, seed);
+  if (revealNow) {
+    out.correct = correctAnswer(item, seed);
+    const details = { ...policyDetails(item, result, seed, lang), ...recipeDetails(item, result) };
+    if (Object.keys(details).length > 0) out.details = details;
+  }
   return out;
+}
+
+export type RecipeFeedback = { output: string; target: string; matched: boolean };
+type RecipeDetails = Record<string, RecipeFeedback>;
+
+/** recipe_pipeline feedback: the learner's server-side output (shortened) beside the target. */
+function recipeDetails(item: Item, result: ItemScore): RecipeDetails {
+  const out: RecipeDetails = {};
+  for (const part of item.parts) {
+    const d = result.details?.[part.key];
+    if (part.type !== "recipe_pipeline" || !d || !("output" in d)) continue;
+    const output = d.output.length > 2000 ? `${d.output.slice(0, 2000)}…` : d.output;
+    out[part.key] = { output, target: part.target, matched: d.output.trim() === part.target };
+  }
+  return out;
+}
+
+export type PolicyFeedback = {
+  requests: { title: string | undefined; reason?: string; allowed: boolean; expected: boolean }[];
+  notes: { token: string; note: string | undefined }[];
+};
+type PolicyDetails = Record<string, PolicyFeedback>;
+
+/**
+ * policy_builder feedback, as the game shows it after a test: each request's policy decision
+ * against the expected one, and the game's risk/cost note for every wrongly decided choice.
+ * Only ever sent with the correct answer.
+ */
+function policyDetails(item: Item, result: ItemScore, seed: string, lang: Lang): PolicyDetails | undefined {
+  const out: PolicyDetails = {};
+  for (const part of item.parts) {
+    const d = result.details?.[part.key];
+    if (part.type !== "policy_builder" || !d || !("allowed" in d)) continue;
+    const byId = new Map<string, { note?: LocalizedText }>([...part.permissions, ...part.conditions].map((o) => [o.id, o]));
+    out[part.key] = {
+      requests: part.requests.map((r, i) => {
+        const row: PolicyDetails[string]["requests"][number] = { title: localize(r.title, lang), allowed: d.allowed[i] ?? false, expected: r.expected };
+        if (r.reason) {
+          const reason = localize(r.reason, lang);
+          const { allowed, expected } = row;
+          return reason === undefined ? row : { title: row.title, reason, allowed, expected };
+        }
+        return row;
+      }),
+      notes: d.wrong
+        .filter((id) => byId.get(id)?.note)
+        .map((id) => ({ token: optionToken(seed, item.key, part.key, id), note: localize(byId.get(id)?.note, lang) })),
+    };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 // ---------------------------------------------------------------------------
