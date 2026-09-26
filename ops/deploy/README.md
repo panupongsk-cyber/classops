@@ -21,10 +21,15 @@ active one):
 | `8b4fd12` | 2026-09-25 | UI polish, frontend only (PS-TASK-20260925-762): phone tab-strip navigation, the Prompt font applied, a form-control baseline, 40px phone tap targets, and a localized file chooser. No migration. Evidence is on #762. |
 | `e51da94` | 2026-09-25 | ITPE IP practice Phase 2 (PS-TASK-20260925-767, -770): the timed mock exam (a server-side deadline and a pass estimate against the official IP rule), and personal progress (bookmarks, a mistakes quiz, "My progress", and an anonymous most-missed ranking), with migrations `015_practice_exam.sql` and `016_practice_progress.sql`. No content re-import. Evidence is on #767 and #770. |
 | `0802c52` | 2026-09-26 | ITPE IP practice Phase 3 (PS-TASK-20260926-785, -789): teacher-set practice assignments (a whole session or a set drawn once; dates, attempts, evidence and review policies; a key lock while open), a staff results view with CSV, and opt-in gradebook sync, with migrations `017_practice_assignments.sql` and `018_practice_assignment_gradebook_sync.sql`. No content re-import. Evidence is on #785 and #789. |
+| `58bad7e` | 2026-09-26 | Learning-games Phase 4 (PS-TASK-20260926-805, -809, -813): activity engine 0.4.0 with the `diagram_pick`, `policy_builder`, and `recipe_pipeline` part types, the `accepted_sets` mode, and the `all_correct` flag. The player gains a data-flow diagram, a policy builder, a recipe builder with a local preview, and stage goals. No migration. Six packages were imported: `cia-triad-foundation`, `cia-triad-extension`, `stride-checkpoints`, `stride-dfd`, `least-privilege-lab`, and `cyberchef-puzzle-lab`, with hashes matching the item bank. Evidence is on #822. |
 
-`0802c52` is the active release, and `e51da94` is its rollback target. A code-only rollback
+`58bad7e` is the active release, and `0802c52` is its rollback target. A code-only rollback
 leaves migrations 012–018 and the imported content in place, and the older code ignores the
 tables it doesn't know.
+- If you roll back past `58bad7e`, the older engine doesn't know the `diagram_pick`,
+  `policy_builder`, and `recipe_pipeline` part types. It can't show or score the six Phase 4
+  activities, so set them to closed first. Their packages and finished attempts stay in the
+  database.
 - If you roll back past `0802c52`, an assignment attempt still in progress is handed to code
   with no assignment review policy or key lock, so its keys could show before the due date. Roll
   back when no assignment is open, or accept that risk. Synced gradebook cells stay as written.
@@ -49,6 +54,8 @@ tables it doesn't know.
   - the manager's evidence view with a CSV download
   - gradebook sync with a preview
   - attempt verification
+  - Phase 4 games: a data-flow diagram (STRIDE), a policy builder (Least-Privilege Lab), and a
+    recipe builder with a local preview (CyberChef)
 - roster import from a student-list CSV, with pending pre-enrollment
 - ITPE IP (IT Passport) exam practice, which a teacher enables per Section:
   - browse, practice, and quick quiz

@@ -88,6 +88,25 @@ test("Practice assignments: staff create, fixed sets, start/resume, due rules, r
     assert.deepEqual([mock.status, mock.questionCount, mock.timeLimitSeconds, mock.maxAttempts, mock.evidencePolicy, mock.reviewPolicy], ["draft", 4, 600, 1, "best", "after_due"]);
     assert.deepEqual((await get(alice, list)).json().assignments, []);
     assert.equal((await post(alice, `/api/practice-assignments/${mock.id}/attempts`)).statusCode, 404, "a draft does not exist for learners");
+
+    // Without a session every assignment route answers 401 before it looks the id up, so it can't
+    // tell a caller which assignment ids exist (PS-TASK-20260926-825).
+    const missing = "00000000-0000-4000-8000-000000000000";
+    const anonymous = (method: "GET" | "POST" | "PATCH" | "DELETE", url: string) =>
+      app.inject({ method, url, headers: origin, ...(method === "GET" ? {} : { payload: {} }) });
+    for (const id of [mock.id as string, missing, "not-a-uuid"]) {
+      const base = `/api/practice-assignments/${id}`;
+      for (const [method, url] of [
+        ["PATCH", base], ["DELETE", base], ["POST", `${base}/attempts`], ["GET", `${base}/results`],
+        ["GET", `${base}/results/export`], ["GET", `${base}/gradebook-sync`], ["POST", `${base}/gradebook-sync`],
+      ] as const) {
+        const res = await anonymous(method, url);
+        assert.deepEqual([res.statusCode, res.json().error], [401, "UNAUTHENTICATED"], `${method} ${url}`);
+      }
+    }
+    // With a session the answers are unchanged: a malformed id is 400, and a missing one is 404.
+    assert.equal((await get(teacher, `/api/practice-assignments/not-a-uuid/results`)).statusCode, 400);
+    assert.deepEqual((await get(teacher, `/api/practice-assignments/${missing}/results`)).json(), { error: "ASSIGNMENT_NOT_FOUND" });
     assert.deepEqual((await post(teacher, list, { title: "Set", kind: "set", category: "Beta", count: 3 })).json(), { error: "TIME_LIMIT_REQUIRED" });
     const set = (await post(teacher, list, { title: "Beta set", kind: "set", category: "Beta", count: 3, timed: false })).json().assignment;
     assert.deepEqual([set.questionCount, set.timeLimitSeconds, set.examId], [3, null, null], "drawn from every session");
