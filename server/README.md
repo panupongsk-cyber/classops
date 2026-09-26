@@ -250,6 +250,11 @@ PS-TASK-20260925-755 (`routes/practice.ts`). The plan is
   `node dist/scripts/import-practice.js /packages/<id>.json`.
   - Identical content is a no-op, and changed content is refused. `--replace` works only while
     no attempt has used the session.
+  - `--update-text` (PS-TASK-20260926-848) updates a session in place when only its text
+    changed, for example a Thai translation added. Question ids, answers, option labels,
+    categories, figures, and the item count and time limit must stay identical, so attempts,
+    bookmarks, and assignments stay valid. Anything structural is refused. It is recorded as
+    `practice_package.updated` in the audit log.
   - Question text, answer keys, and figures never enter this repository. Tests use
     `test/fixtures/synthetic-practice.ts`.
 - **Access.** Practice is per-Section opt-in: `sections.practice_enabled`, default false. It is

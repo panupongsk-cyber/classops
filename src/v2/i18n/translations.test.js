@@ -61,6 +61,7 @@ describe('translations', () => {
       ...['not_started', 'in_progress', 'submitted'].map((s) => `resultsStatus_${s}`), // server learnerResults
       ...['practice', 'quiz', 'exam'].map((m) => `practiceMode_${m}`), // server attempt modes
       ...['first', 'best', 'last', 'mean'].map((p) => `activityPolicy${cap(p)}`), // EvidencePage
+      'practiceTranslationNote', 'practiceTranslationNoteUnofficial', // PracticePage translationNoteKey
     ]
     expect(families.length).toBeGreaterThan(35)
     expect(families.filter((k) => !(k in translations.th) || !(k in translations.en))).toEqual([])
