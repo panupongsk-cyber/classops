@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
-import { canManageSessions, getSectionRoles, hasAnyRole } from "../authz.js";
+import { canManageSessions, getSectionRoles, hasAnyRole, type AuthenticatedUser } from "../authz.js";
 import type { AppConfig } from "../config.js";
 import { toCsv } from "../csv.js";
 import { requireCurrentUser } from "../current-user.js";
@@ -145,6 +145,10 @@ export async function registerPracticeAssignmentRoutes(app: FastifyInstance, dep
   async function member(request: FastifyRequest, reply: FastifyReply, sectionId: string) {
     const user = await requireCurrentUser(request, reply, pool, config);
     if (!user) return null;
+    return sectionAccess(reply, user, sectionId);
+  }
+
+  async function sectionAccess(reply: FastifyReply, user: AuthenticatedUser, sectionId: string) {
     if (!idSchema.safeParse(sectionId).success) {
       await reply.code(400).send({ error: "INVALID_REQUEST" });
       return null;
@@ -165,7 +169,11 @@ export async function registerPracticeAssignmentRoutes(app: FastifyInstance, dep
     return { user, sectionId, staff, grader };
   }
 
+  // Authenticate before touching the id, so a caller without a session can't tell which
+  // assignment ids exist (as the learning-activity routes do).
   async function loadAssignment(request: FastifyRequest, reply: FastifyReply) {
+    const user = await requireCurrentUser(request, reply, pool, config);
+    if (!user) return null;
     const { assignmentId } = request.params as { assignmentId: string };
     if (!idSchema.safeParse(assignmentId).success) {
       await reply.code(400).send({ error: "INVALID_REQUEST" });
@@ -176,7 +184,7 @@ export async function registerPracticeAssignmentRoutes(app: FastifyInstance, dep
       await reply.code(404).send({ error: "ASSIGNMENT_NOT_FOUND" });
       return null;
     }
-    const ctx = await member(request, reply, row.section_id);
+    const ctx = await sectionAccess(reply, user, row.section_id);
     if (!ctx) return null;
     // Students never see a draft.
     if (!ctx.staff && row.status === "draft") {
