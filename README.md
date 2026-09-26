@@ -18,6 +18,20 @@ dropped legacy tree, so nothing here depends on it.
 `uuid` dependencies (legacy-only) and the `emulators`/`start` scripts (Firebase emulator) were
 removed; `qrcode.react` was kept because `src/v2/attendance/SessionLivePage.jsx` uses it too.
 
+## Tests
+
+- **Server:** `npm --prefix server test`. Its integration tests need `TEST_DATABASE_URL`, pointing
+  at a throwaway PostgreSQL database.
+- **Frontend:** `npm test`, which runs Vitest with React Testing Library in jsdom
+  (`vitest.config.js`, `src/**/*.test.{js,jsx}`).
+  - i18n key parity, and every literal and template-built `t()` key is defined
+  - each activity part's empty and complete answers
+  - the diagram, policy, and recipe parts
+  - the mock exam's in-order saves, and Submit waiting for them
+  - bookmark saves
+
+  This tree is published, so tests use synthetic data only.
+
 ## Source and deployment relationship
 
 - **Origin:** [panupongsk-cyber/classops](https://github.com/panupongsk-cyber/classops), public
