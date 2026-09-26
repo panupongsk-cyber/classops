@@ -19,10 +19,14 @@ active one):
 | `efe0f12` | 2026-09-25 | Roster import from any student-list CSV, TIS-620 aware, with column mapping and pre-enrollment claimed at sign-in (PS-TASK-20260925-744, -747), with migration `014_section_roster.sql`. Evidence is on #744. |
 | `03e97a1` | 2026-09-25 | ITPEC IT Passport exam practice, opt-in per Section (PS-TASK-20260925-751, -755), with migration `012_practice.sql`. The 9 sessions (900 questions) were imported. Evidence is on #751 and #755. |
 | `8b4fd12` | 2026-09-25 | UI polish, frontend only (PS-TASK-20260925-762): phone tab-strip navigation, the Prompt font applied, a form-control baseline, 40px phone tap targets, and a localized file chooser. No migration. Evidence is on #762. |
+| `e51da94` | 2026-09-25 | ITPEC Phase 2 (PS-TASK-20260925-767, -770): the timed mock exam (a server-side deadline and a pass estimate against the official IP rule), and personal progress (bookmarks, a mistakes quiz, "My progress", and an anonymous most-missed ranking), with migrations `015_practice_exam.sql` and `016_practice_progress.sql`. No content re-import. Evidence is on #767 and #770. |
 
-`8b4fd12` is the active release, and `03e97a1` is its rollback target (frontend only). A
-code-only rollback leaves migrations 012–014 and the imported content in place, and the older
-code ignores the tables it doesn't know.
+`e51da94` is the active release, and `8b4fd12` is its rollback target. A code-only rollback
+leaves migrations 012–016 and the imported content in place, and the older code ignores the
+tables it doesn't know.
+- If you roll back past `e51da94`, a mock exam still in progress is handed to older code that
+  knows no `exam` mode and treats it as a practice run, showing the key after each answer. Roll
+  back when no exam is running, or accept that risk.
 - If you roll back past `e0f50a0`, an activity set to `mean` behaves as `best` until its policy
   is set again.
 - Importing practice content works like the activity packages:
@@ -42,7 +46,10 @@ code ignores the tables it doesn't know.
   - gradebook sync with a preview
   - attempt verification
 - roster import from a student-list CSV, with pending pre-enrollment
-- ITPEC IT Passport exam practice, which a teacher enables per Section
+- ITPEC IT Passport exam practice, which a teacher enables per Section:
+  - browse, practice, and quick quiz
+  - a timed mock exam with a pass estimate
+  - bookmarks, a mistakes quiz, and "My progress"
 - the Admin Console
 
 **Limits that still apply.** The three deferred items below were issues in the archived `ps-work`

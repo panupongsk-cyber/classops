@@ -889,6 +889,7 @@ export async function registerActivityRoutes(
            VALUES ($1, $2, $3, $4, $3, now())
            ON CONFLICT (assignment_id, user_id) DO UPDATE
            SET points_earned = EXCLUDED.points_earned, synced_from_activity_id = EXCLUDED.synced_from_activity_id,
+               synced_from_practice_assignment_id = NULL,
                synced_points = EXCLUDED.synced_points, synced_at = now(), updated_at = now()`,
           [plan.assignment.id, row.userId, row.newPoints, activity.id],
         );

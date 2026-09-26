@@ -24,8 +24,10 @@ import ActivitiesPage from './activities/ActivitiesPage.jsx'
 import AttemptPage from './activities/AttemptPage.jsx'
 import EvidencePage from './activities/EvidencePage.jsx'
 import PlayerPage from './activities/PlayerPage.jsx'
+import PracticeAssignmentsPage from './practice/PracticeAssignmentsPage.jsx'
 import PracticePage from './practice/PracticePage.jsx'
 import PracticeProgressPage from './practice/PracticeProgressPage.jsx'
+import PracticeResultsPage from './practice/PracticeResultsPage.jsx'
 import PracticeRunPage from './practice/PracticeRunPage.jsx'
 
 function ProtectedRoute({ children }) {
@@ -67,6 +69,8 @@ export default function V2App() {
       <Route path="/v2/sections/:sectionId/practice" element={<ShellRoute><PracticePage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/practice/attempts/:attemptId" element={<ShellRoute><PracticeRunPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/practice/progress" element={<ShellRoute><PracticeProgressPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/practice/assignments" element={<ShellRoute><PracticeAssignmentsPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/practice/assignments/:assignmentId/results" element={<ShellRoute><PracticeResultsPage /></ShellRoute>} />
       <Route path="/v2/admin" element={<AdminRoute><AdminOverviewPage /></AdminRoute>} />
       <Route path="/v2/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
       <Route path="/v2/admin/courses" element={<AdminRoute><AdminCoursesPage /></AdminRoute>} />

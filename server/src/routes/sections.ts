@@ -61,7 +61,10 @@ export async function registerSectionRoutes(
       return reply.code(403).send({ error: "FORBIDDEN" });
     }
     const result = await pool.query(
-      `SELECT id, course_id, term, label, join_code, practice_enabled FROM sections WHERE id = $1`,
+      `SELECT id, course_id, term, label, join_code, practice_enabled,
+              (SELECT count(*)::int FROM practice_assignments AS pa WHERE pa.section_id = sections.id AND pa.status <> 'draft')
+                AS practice_assignment_count
+       FROM sections WHERE id = $1`,
       [sectionId],
     );
     if (!result.rowCount) return reply.code(404).send({ error: "SECTION_NOT_FOUND" });
