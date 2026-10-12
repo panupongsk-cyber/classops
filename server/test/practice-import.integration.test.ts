@@ -23,6 +23,16 @@ test("practice package validation catches broken content", () => {
   }
   const noThai = syntheticPracticePackage("2099A_XX", false);
   assert.deepEqual(validatePracticePackage(noThai), []);
+
+  // Option-level figures (PS-TASK-20261012-1760): a packaged figure named from an option is valid;
+  // a dangling id is not.
+  const withOptFig = syntheticPracticePackage("2099B_XX");
+  withOptFig.figures.push({ id: "2099B_XX_Q001_Oa", mime: "image/png", sha256: withOptFig.figures[0]!.sha256, data_base64: withOptFig.figures[0]!.data_base64 });
+  withOptFig.questions[0]!.options[0]!.figure = { en: "2099B_XX_Q001_Oa" };
+  assert.deepEqual(validatePracticePackage(withOptFig), []);
+  const dangling = syntheticPracticePackage("2099C_XX");
+  dangling.questions[0]!.options[1]!.figure = { en: "2099C_XX_Q001_Oz" };
+  assert.match(validatePracticePackage(dangling).join("\n"), /options\[1\]\.figure\.en: must name a packaged figure/);
 });
 
 test("practice import: idempotent, refuses changed content, replaces only before attempts", { skip: !databaseUrl }, async () => {
@@ -84,6 +94,32 @@ test("practice import: idempotent, refuses changed content, replaces only before
     assert.match((await pool.query<{ translation_note: string }>("SELECT translation_note FROM exam_sessions")).rows[0]!.translation_note, /unofficial/);
     assert.equal((await importPracticePackage(pool, retranslated, { updateText: true })).status, "unchanged", "idempotent after the update");
     assert.equal((await pool.query("SELECT 1 FROM audit_log WHERE event_type = 'practice_package.updated'")).rowCount, 1);
+
+    // Option-level figure additions land in place (PS-TASK-20261012-1760), even with an attempt.
+    const withOptFigs = syntheticPracticePackage();
+    withOptFigs.questions[0]!.stem = { en: "Corrected wording?", th: "ถ้อยคำที่แก้แล้ว" }; // the stored text after the update above
+    withOptFigs.exam.categories = withOptFigs.exam.categories.map((c) => ({ field: c.field, name: c.name }));
+    withOptFigs.exam.translation_note = "Thai text is an unofficial translation made for this course, not an ITPEC edition.";
+    const figsBefore = (await pool.query("SELECT 1 FROM practice_figures")).rowCount;
+    for (const label of ["a", "b", "c", "d"]) {
+      const fid = `2099S_XX_Q001_O${label}`;
+      withOptFigs.figures.push({ id: fid, mime: "image/png", sha256: withOptFigs.figures[0]!.sha256, data_base64: withOptFigs.figures[0]!.data_base64 });
+      withOptFigs.questions[0]!.options.find((o) => o.label === label)!.figure = { en: fid };
+    }
+    const figAdded = await importPracticePackage(pool, withOptFigs, { updateText: true });
+    assert.equal(figAdded.status, "updated");
+    assert.equal(figAdded.id, sessionBefore, "the same exam session row");
+    assert.equal((await pool.query("SELECT 1 FROM practice_figures")).rowCount, figsBefore! + 4, "the new figures are stored");
+    assert.deepEqual((await pool.query<{ id: string; content_id: string }>("SELECT id, content_id FROM practice_questions ORDER BY seq")).rows, before, "question ids are kept");
+    assert.equal((await pool.query("SELECT 1 FROM practice_attempts")).rowCount, 1, "the attempt survives the figure addition");
+    const q0opts = (await pool.query<{ options: { label: string; figure?: { en: string } }[] }>("SELECT options FROM practice_questions WHERE seq = 1")).rows[0]!.options;
+    assert.equal(q0opts[0]!.figure!.en, "2099S_XX_Q001_Oa", "the option figure reference is stored");
+    // A second identical update is a no-op, and removing a stored figure is still refused.
+    assert.equal((await importPracticePackage(pool, withOptFigs, { updateText: true })).status, "unchanged", "idempotent after the figure addition");
+    const removed = structuredClone(withOptFigs);
+    removed.figures = removed.figures.filter((f) => f.id !== "2099S_XX_Q001_Oa");
+    delete removed.questions[0]!.options[0]!.figure;
+    await assert.rejects(importPracticePackage(pool, removed, { updateText: true }), /--update-text refused/, "figure removal must stay refused");
 
     // Anything structural is refused, even in --update-text mode.
     const structural: [string, (p: ReturnType<typeof syntheticPracticePackage>) => void][] = [

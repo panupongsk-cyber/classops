@@ -23,10 +23,14 @@ active one):
 | `0802c52` | 2026-09-26 | ITPE IP practice Phase 3 (PS-TASK-20260926-785, -789): teacher-set practice assignments (a whole session or a set drawn once; dates, attempts, evidence and review policies; a key lock while open), a staff results view with CSV, and opt-in gradebook sync, with migrations `017_practice_assignments.sql` and `018_practice_assignment_gradebook_sync.sql`. No content re-import. Evidence is on #785 and #789. |
 | `58bad7e` | 2026-09-26 | Learning-games Phase 4 (PS-TASK-20260926-805, -809, -813): activity engine 0.4.0 with the `diagram_pick`, `policy_builder`, and `recipe_pipeline` part types, the `accepted_sets` mode, and the `all_correct` flag. The player gains a data-flow diagram, a policy builder, a recipe builder with a local preview, and stage goals. No migration. Six packages were imported: `cia-triad-foundation`, `cia-triad-extension`, `stride-checkpoints`, `stride-dfd`, `least-privilege-lab`, and `cyberchef-puzzle-lab`, with hashes matching the item bank. Evidence is on #822. |
 | `49d5d50` | 2026-09-26 | Practice-assignment auth order (PS-TASK-20260926-825): every `/api/practice-assignments/:assignmentId…` route authenticates before it looks the id up. A request without a session gets 401 whether or not the id exists, so assignment ids can no longer be probed. Signed-in responses are unchanged. No migration and no import. Evidence is on #834. |
+| `2787a95` | 2026-09-26 | The frontend test suite runs in CI (PS-TASK-20260926-838), and the practice home falls back to a generic message for unmapped error codes. The practice home labels an unofficial Thai translation as such (-842). `import-practice --update-text` updates a session's text in place, keeping question ids, answers, and figures (-848). With it, the text of `2025A_IP` and `2026S_IP` was updated to add their unofficial Thai translations (-842, -845), and attempts are kept. No migration. Evidence is on #854. |
 
-`49d5d50` is the active release, and `58bad7e` is its rollback target. A code-only rollback
+`2787a95` is the active release, and `49d5d50` is its rollback target. A code-only rollback
 leaves migrations 012–018 and the imported content in place, and the older code ignores the
 tables it doesn't know.
+- If you roll back past `2787a95`, the practice text of `2025A_IP` and `2026S_IP` stays in its
+  updated, Thai-enabled form, which older code shows as a normal Thai session. The only visible
+  difference is that the older practice home calls it "from the Thai-language edition".
 - If you roll back past `58bad7e`, the older engine doesn't know the `diagram_pick`,
   `policy_builder`, and `recipe_pipeline` part types. It can't show or score the six Phase 4
   activities, so set them to closed first. Their packages and finished attempts stay in the

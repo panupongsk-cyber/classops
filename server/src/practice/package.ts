@@ -19,7 +19,9 @@ export interface PracticeQuestion {
   content_id: string;
   seq: number;
   stem: LocalText;
-  options: { label: string; text: LocalText }[];
+  /** An option may reference its own packaged figure (PS-TASK-20261012-1760): the option's text
+   * is then alt/assistive description only, since the UI renders the image in its place. */
+  options: { label: string; text: LocalText; figure?: { en?: string; th?: string } }[];
   answer: string;
   category: string;
   field: string;
@@ -114,6 +116,12 @@ export function validatePracticePackage(raw: unknown): string[] {
       const t = isObject(o) && isObject(o.text) ? o.text : {};
       if (!text(t.en)) err(`${qp}.options[${j}].text.en`, "required");
       if (hasTh && !text(t.th)) err(`${qp}.options[${j}].text.th`, "required: the exam lists th");
+      if (isObject(o) && o.figure !== null && o.figure !== undefined) {
+        const of = isObject(o.figure) ? o.figure : {};
+        for (const [lang, id] of Object.entries(of)) {
+          if ((lang !== "en" && lang !== "th") || typeof id !== "string" || !figureIds.has(id)) err(`${qp}.options[${j}].figure.${lang}`, "must name a packaged figure");
+        }
+      }
     });
     if (typeof q.answer !== "string" || !labels.includes(q.answer)) err(`${qp}.answer`, "must be one of the option labels");
     if (!text(q.category) || !categoryNames.has(q.category)) err(`${qp}.category`, "must be one of $.exam.categories");
