@@ -37,6 +37,13 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
           const keyKnown = Boolean(revealed?.answer)
           const isAnswer = keyKnown && revealed.answer === o.label
           const wrong = keyKnown && isSelected && !isAnswer
+          // Option-level figures (PS-TASK-20261012-1760): the image replaces the text, which is
+          // its alt; a bare "(see figure)" placeholder becomes a generic alt instead.
+          const optFigure = o.figure ? (lang === 'th' && o.figure.th) || o.figure.en : null
+          const rawAlt = pick(o.text, lang) ?? ''
+          const alt = optFigure && /^[\s(]*((see figure[.!]?)|ดูรูปภาพ)[\s).!]*$/i.test(rawAlt)
+            ? t('practiceOptionFigureAlt', { label: o.label })
+            : rawAlt
           return (
             <button
               key={o.label}
@@ -48,7 +55,11 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
               onClick={() => onSelect?.(o.label)}
             >
               <span className="v2-choice-mark" aria-hidden="true">{o.label})</span>
-              <span style={{ whiteSpace: 'pre-wrap' }}>{pick(o.text, lang)}</span>
+              {optFigure ? (
+                <img src={optFigure} alt={alt} style={{ maxWidth: 'min(100%, 360px)', borderRadius: 8, verticalAlign: 'middle' }} />
+              ) : (
+                <span style={{ whiteSpace: 'pre-wrap' }}>{pick(o.text, lang)}</span>
+              )}
             </button>
           )
         })}

@@ -10,6 +10,8 @@
 // `--update-text` (PS-TASK-20260926-848) updates a session in place when only its text changed —
 // e.g. a Thai translation added — keeping every question id, answer, option label, category, and
 // figure, so attempts, bookmarks, and assignments stay valid; anything structural is refused.
+// Since PS-TASK-20261012-1760 it also admits ADDING figures (option-level diagrams): a stored
+// figure may never be removed or changed in bytes, only supplemented.
 
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -64,9 +66,14 @@ async function assertTextOnly(client: Client, sessionId: string, pkg: PracticePa
     if ((r!.figure_en ?? null) !== (q.figure?.en ?? null) || (r!.figure_th ?? null) !== (q.figure?.th ?? null)) refuse(`${q.content_id}'s figures`);
     if (r!.options.map((o) => o.label).join(",") !== q.options.map((o) => o.label).join(",")) refuse(`${q.content_id}'s option labels`);
   }
-  const figures = (await client.query<{ id: string; sha256: string }>("SELECT id, sha256 FROM practice_figures WHERE exam_session_id = $1", [sessionId])).rows;
-  const sig = (list: { id: string; sha256: string }[]) => list.map((f) => `${f.id}:${f.sha256}`).sort().join("|");
-  if (sig(figures) !== sig(pkg.figures)) refuse("the figure set");
+  const storedFigures = (await client.query<{ id: string; sha256: string }>("SELECT id, sha256 FROM practice_figures WHERE exam_session_id = $1", [sessionId])).rows;
+  // Additions are allowed (option-level figures); removal or byte change of a stored figure is not.
+  // Stem references are already frozen by the checks above, so additions are reachable only from
+  // options; the option-figure ids are validated against the package by validatePracticePackage.
+  for (const f of storedFigures) {
+    const pkgf = pkg.figures.find((p2) => p2.id === f.id);
+    if (!pkgf || pkgf.sha256 !== f.sha256) refuse(`the figure set (stored figure ${f.id} removed or changed)`);
+  }
 }
 
 export async function importPracticePackage(
@@ -90,12 +97,19 @@ export async function importPracticePackage(
       if (row.content_hash === contentHash) return { status: "unchanged", id: row.id, contentId, contentHash };
       if (options.updateText) {
         await assertTextOnly(client, row.id, pkg);
+        const storedForUpdate = new Set((await client.query<{ id: string }>("SELECT id FROM practice_figures WHERE exam_session_id = $1", [row.id])).rows.map((r) => r.id));
         const e = pkg.exam;
         await client.query(
           `UPDATE exam_sessions SET title = $2, subtitle = $3, provider = $4, session_label = $5, languages = $6, attribution = $7,
              translation_note = $8, content_hash = $9 WHERE id = $1`,
           [row.id, e.title, e.subtitle ?? null, e.provider, e.session ?? null, e.languages, e.attribution, e.translation_note ?? null, contentHash],
         );
+        for (const f of pkg.figures) {
+          if (storedForUpdate.has(f.id)) continue;
+          await client.query("INSERT INTO practice_figures (id, exam_session_id, mime, sha256, data) VALUES ($1, $2, $3, $4, $5)", [
+            f.id, row.id, f.mime, f.sha256, Buffer.from(f.data_base64, "base64"),
+          ]);
+        }
         for (const q of pkg.questions) {
           await client.query(
             "UPDATE practice_questions SET stem = $3::jsonb, options = $4::jsonb WHERE exam_session_id = $1 AND content_id = $2",

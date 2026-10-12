@@ -139,7 +139,7 @@ interface QuestionRow {
   content_id: string;
   seq: number;
   stem: { en: string; th?: string };
-  options: { label: string; text: { en: string; th?: string } }[];
+  options: { label: string; text: { en: string; th?: string }; figure?: { en?: string; th?: string } | null }[];
   answer: string;
   category: string;
   field: string;
@@ -175,14 +175,16 @@ export async function lockedQuestionIds(pool: DatabasePool, sectionId: string) {
 }
 
 function questionView(q: QuestionRow, withAnswer: boolean) {
-  const figure = (id: string | null) => (id ? `/api/practice/figures/${encodeURIComponent(id)}` : null);
+  const figure = (id: string | null | undefined) => (id ? `/api/practice/figures/${encodeURIComponent(id)}` : null);
   return {
     id: q.id,
     contentId: q.content_id,
     examContentId: q.exam_content_id,
     seq: q.seq,
     stem: q.stem,
-    options: q.options,
+    // Option-level figures (PS-TASK-20261012-1760): the stored options carry packaged figure ids;
+    // the browser gets the same authenticated figure-route URLs the stem figure already uses.
+    options: q.options.map((o) => (o.figure ? { ...o, figure: { en: figure(o.figure.en), th: figure(o.figure.th) } } : o)),
     category: q.category,
     field: q.field,
     figure: { en: figure(q.figure_en), th: figure(q.figure_th) },
