@@ -112,8 +112,8 @@ export async function importPracticePackage(
         }
         for (const q of pkg.questions) {
           await client.query(
-            "UPDATE practice_questions SET stem = $3::jsonb, options = $4::jsonb WHERE exam_session_id = $1 AND content_id = $2",
-            [row.id, q.content_id, JSON.stringify(q.stem), JSON.stringify(q.options)],
+            "UPDATE practice_questions SET stem = $3::jsonb, options = $4::jsonb, explanation = $5::jsonb WHERE exam_session_id = $1 AND content_id = $2",
+            [row.id, q.content_id, JSON.stringify(q.stem), JSON.stringify(q.options), q.explanation ? JSON.stringify(q.explanation) : null],
           );
         }
         await client.query(
@@ -150,9 +150,9 @@ export async function importPracticePackage(
     }
     for (const q of pkg.questions) {
       await client.query(
-        `INSERT INTO practice_questions (exam_session_id, content_id, seq, stem, options, answer, category, field, figure_en, figure_th)
-         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10)`,
-        [id, q.content_id, q.seq, JSON.stringify(q.stem), JSON.stringify(q.options), q.answer, q.category, q.field, q.figure?.en ?? null, q.figure?.th ?? null],
+        `INSERT INTO practice_questions (exam_session_id, content_id, seq, stem, options, answer, category, field, figure_en, figure_th, explanation)
+         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11::jsonb)`,
+        [id, q.content_id, q.seq, JSON.stringify(q.stem), JSON.stringify(q.options), q.answer, q.category, q.field, q.figure?.en ?? null, q.figure?.th ?? null, q.explanation ? JSON.stringify(q.explanation) : null],
       );
     }
     await client.query(

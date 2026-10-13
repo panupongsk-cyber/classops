@@ -145,10 +145,11 @@ interface QuestionRow {
   field: string;
   figure_en: string | null;
   figure_th: string | null;
+  explanation: { en: string; th?: string } | null;
   exam_content_id: string;
 }
 
-const QUESTION_COLUMNS = `q.id, q.content_id, q.seq, q.stem, q.options, q.answer, q.category, q.field, q.figure_en, q.figure_th,
+const QUESTION_COLUMNS = `q.id, q.content_id, q.seq, q.stem, q.options, q.answer, q.category, q.field, q.figure_en, q.figure_th, q.explanation,
   s.content_id AS exam_content_id`;
 
 /** Browser view of one question. `withAnswer` only in browse mode or after the learner answered. */
@@ -188,7 +189,9 @@ function questionView(q: QuestionRow, withAnswer: boolean) {
     category: q.category,
     field: q.field,
     figure: { en: figure(q.figure_en), th: figure(q.figure_th) },
-    ...(withAnswer ? { answer: q.answer } : {}),
+    // The explanation (PS-TASK-20261013-1777) travels with the answer and never before it: the
+    // key-lock rules for a question (open assignment, running mock exam) then cover it for free.
+    ...(withAnswer ? { answer: q.answer, ...(q.explanation ? { explanation: q.explanation } : {}) } : {}),
   };
 }
 

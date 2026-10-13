@@ -30,6 +30,14 @@ test("practice package validation catches broken content", () => {
   withOptFig.figures.push({ id: "2099B_XX_Q001_Oa", mime: "image/png", sha256: withOptFig.figures[0]!.sha256, data_base64: withOptFig.figures[0]!.data_base64 });
   withOptFig.questions[0]!.options[0]!.figure = { en: "2099B_XX_Q001_Oa" };
   assert.deepEqual(validatePracticePackage(withOptFig), []);
+  // Explanations (PS-TASK-20261013-1777): both languages are required when the exam lists th.
+  const withExplanation = syntheticPracticePackage("2099D_XX");
+  withExplanation.questions[0]!.explanation = { en: "Because X.", th: "เพราะ X" };
+  assert.deepEqual(validatePracticePackage(withExplanation), []);
+  const missingTh = syntheticPracticePackage("2099E_XX");
+  missingTh.questions[0]!.explanation = { en: "Because X." };
+  assert.match(validatePracticePackage(missingTh).join("\n"), /explanation\.th: required/);
+
   const dangling = syntheticPracticePackage("2099C_XX");
   dangling.questions[0]!.options[1]!.figure = { en: "2099C_XX_Q001_Oz" };
   assert.match(validatePracticePackage(dangling).join("\n"), /options\[1\]\.figure\.en: must name a packaged figure/);

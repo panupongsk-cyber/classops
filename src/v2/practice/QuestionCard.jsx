@@ -64,6 +64,12 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
           )
         })}
       </div>
+      {revealed?.answer && question.explanation && (
+        <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(0,0,0,0.03)', border: '1px solid var(--v2-border)', borderRadius: 8 }}>
+          <div className="v2-subtext" style={{ marginBottom: 4 }}>{t('practiceExplanationNote')}</div>
+          <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{pick(question.explanation, lang)}</p>
+        </div>
+      )}
     </div>
   )
 }
