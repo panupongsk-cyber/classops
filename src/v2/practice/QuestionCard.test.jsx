@@ -49,4 +49,22 @@ describe('QuestionCard option figures', () => {
     renderCard()
     expect(screen.getByText('Plain text option')).toBeTruthy()
   })
+
+  it('shows the explanation with its label only once the key is revealed', () => {
+    const withExplanation = { ...question, explanation: { en: 'The loop terminates at once.' } }
+    const { unmount } = render(
+      <I18nProvider>
+        <QuestionCard question={withExplanation} lang="en" selected="a" onSelect={() => {}} />
+      </I18nProvider>,
+    )
+    expect(screen.queryByText('The loop terminates at once.')).toBeNull()
+    unmount()
+    render(
+      <I18nProvider>
+        <QuestionCard question={withExplanation} lang="en" selected="a" revealed={{ selected: 'a', answer: 'a' }} onSelect={() => {}} />
+      </I18nProvider>,
+    )
+    expect(screen.getByText('Supplementary explanation — not ITPEC content')).toBeTruthy()
+    expect(screen.getByText('The loop terminates at once.')).toBeTruthy()
+  })
 })

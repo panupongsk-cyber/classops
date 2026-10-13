@@ -26,6 +26,9 @@ export interface PracticeQuestion {
   category: string;
   field: string;
   figure: { en?: string; th?: string } | null;
+  /** Supplementary explanation of the answer (PS-TASK-20261013-1777). Our course's own text —
+   * never ITPEC content — and served only once the key is revealed. */
+  explanation?: LocalText | null;
 }
 export interface PracticeFigure {
   id: string;
@@ -126,6 +129,11 @@ export function validatePracticePackage(raw: unknown): string[] {
     if (typeof q.answer !== "string" || !labels.includes(q.answer)) err(`${qp}.answer`, "must be one of the option labels");
     if (!text(q.category) || !categoryNames.has(q.category)) err(`${qp}.category`, "must be one of $.exam.categories");
     if (!text(q.field)) err(`${qp}.field`, "required");
+    if (q.explanation !== null && q.explanation !== undefined) {
+      const ex = isObject(q.explanation) ? q.explanation : {};
+      if (!text(ex.en)) err(`${qp}.explanation.en`, "required");
+      if (hasTh && !text(ex.th)) err(`${qp}.explanation.th`, "required: the exam lists th");
+    }
     if (q.figure !== null && q.figure !== undefined) {
       const fig = isObject(q.figure) ? q.figure : {};
       for (const [lang, id] of Object.entries(fig)) {

@@ -24,10 +24,14 @@ active one):
 | `58bad7e` | 2026-09-26 | Learning-games Phase 4 (PS-TASK-20260926-805, -809, -813): activity engine 0.4.0 with the `diagram_pick`, `policy_builder`, and `recipe_pipeline` part types, the `accepted_sets` mode, and the `all_correct` flag. The player gains a data-flow diagram, a policy builder, a recipe builder with a local preview, and stage goals. No migration. Six packages were imported: `cia-triad-foundation`, `cia-triad-extension`, `stride-checkpoints`, `stride-dfd`, `least-privilege-lab`, and `cyberchef-puzzle-lab`, with hashes matching the item bank. Evidence is on #822. |
 | `49d5d50` | 2026-09-26 | Practice-assignment auth order (PS-TASK-20260926-825): every `/api/practice-assignments/:assignmentId…` route authenticates before it looks the id up. A request without a session gets 401 whether or not the id exists, so assignment ids can no longer be probed. Signed-in responses are unchanged. No migration and no import. Evidence is on #834. |
 | `2787a95` | 2026-09-26 | The frontend test suite runs in CI (PS-TASK-20260926-838), and the practice home falls back to a generic message for unmapped error codes. The practice home labels an unofficial Thai translation as such (-842). `import-practice --update-text` updates a session's text in place, keeping question ids, answers, and figures (-848). With it, the text of `2025A_IP` and `2026S_IP` was updated to add their unofficial Thai translations (-842, -845), and attempts are kept. No migration. Evidence is on #854. |
+| `53a0dfd` | 2026-10-13 | Option-level practice figures, end to end (PS-TASK-20261012-1760): the exporter emits per-option crops, the package validator and importer accept them, `--update-text` admits figure additions only, and `QuestionCard` renders the option image with its description as alt text; the 2026S Q67 source-check correction (PS-TASK-20261012-1753) rides the same export. The six affected sessions were re-imported with `--replace` (figures 168 → 208): 2022A Q95 and 2025S Q30 are answerable again, and 2026S Q94 no longer gives its answer away. No migration. The same rollout restored the database from the nightly dump `classops-20261012T200001Z` after a volume-removal mistake; evidence is on #1760. |
 
-`2787a95` is the active release, and `49d5d50` is its rollback target. A code-only rollback
+`53a0dfd` is the active release, and `2787a95` is its rollback target. A code-only rollback
 leaves migrations 012–018 and the imported content in place, and the older code ignores the
 tables it doesn't know.
+- If you roll back past `53a0dfd`, the imported practice content keeps its option-level figures,
+  which older code ignores: it shows each option's description text (now a neutral visual
+  transcription) instead of the image. Question ids, answers, and attempts are unaffected.
 - If you roll back past `2787a95`, the practice text of `2025A_IP` and `2026S_IP` stays in its
   updated, Thai-enabled form, which older code shows as a normal Thai session. The only visible
   difference is that the older practice home calls it "from the Thai-language edition".
