@@ -67,7 +67,7 @@ test("private global library: isolated import, no implicit admin access, hidden 
     const base = "/api/library/2099S_XX";
     const item = `${base}/questions/2099S_XX_Q001`;
     const fig = `${base}/figures/2099S_XX_Q002_en`;
-    for (const url of ["/api/library", `${base}/questions`, item, `${item}/answer`, fig]) {
+    for (const url of ["/api/library", "/api/library/search?scope=search", `${base}/questions`, item, `${item}/answer`, fig]) {
       assert.equal((await get(url)).statusCode, 401, url);
       const denied = await get(url, admin.cookie);
       assert.equal(denied.statusCode, 403, "a different platform admin is refused: " + url);
@@ -121,6 +121,37 @@ test("private global library: isolated import, no implicit admin access, hidden 
     assert.deepEqual(table.table.rows,[["x","y"],["α","β"]]);assert.equal(table.options[0].label,"ก");
     const voided=(await get("/api/library/GEN/questions/GEN_Q004/answer",owner.cookie)).json();
     assert.equal(voided.voided,true);assert.equal(voided.answer,null);
+    // Search uses literal normalized stems/options, scoped categories and stable global context.
+    const searchable=syntheticLibraryPackage();
+    searchable.paper.exam={...searchable.paper.exam,content_id:"2024S_SEARCH",item_count:25};
+    searchable.paper.family="search-family";
+    searchable.paper.questions=Array.from({length:25},(_,i)=>({...searchable.paper.questions[0]!,content_id:`SEARCH_${i+1}`,seq:i+1,source_number:String(i+1),stem:{th:"โจทย์สังเคราะห์ ค้นหา",en:i===0?"Cafe\u0301   ALPHA 100%_":"Café ALPHA"},category:i===24?null:"Shared",options:[{label:"a",text:{en:"needle in choice"},figure:null}],answer:i===23?null:"a",answer_alternatives:[],question_type:"multiple_choice" as const,explanation:{en:"secret-only-not-searchable"}}));
+    searchable.paper.figures=[];
+    await importLibraryPackage(pool,searchable);
+    const searchUrl=(args:Record<string,string>)=>"/api/library/search?"+new URLSearchParams({scope:"search",...args});
+    const search=(args:Record<string,string>)=>get(searchUrl(args),owner.cookie);
+    const matched=(await search({q:" CAFÉ alpha ",family:"search-family"})).json();
+    assert.equal(matched.total,25);
+    assert.equal(matched.questions.length,20);
+    assert.ok(!("answer" in matched.questions[0])&&!("explanation" in matched.questions[0]));
+    const second=(await search({q:"CAFÉ alpha",family:"search-family",page:"2"})).json();
+    assert.equal(new Set([...matched.questions,...second.questions].map((q:{source_id:string})=>q.source_id)).size,25);
+    assert.equal((await search({q:"100%_"})).json().total,1);
+    assert.equal((await search({q:"secret-only-not-searchable"})).json().total,0);
+    assert.equal((await search({q:"needle in choice",family:"search-family",year:"2024",language:"en",answer:"available",category:JSON.stringify(["search-family","Shared"])})).json().total,23);
+    assert.equal((await search({q:"ค้นหา",family:"search-family",answer:"missing"})).json().total,1);
+    assert.equal((await search({family:"search-family",category:JSON.stringify(["different-family","Shared"])})).json().total,0);
+    assert.equal((await search({family:"search-family",category:JSON.stringify(["search-family",null])})).json().total,1);
+    assert.equal((await search({family:"search-family",page:"99"})).json().questions.length,0);
+    for(const args of [{page:"0"},{q:"x".repeat(201)},{answer:"wrong"},{category:"invalid"},{year:"2569"},{language:"xx"},{extra:"no"}])assert.equal((await search(args)).statusCode,400);
+    const contextQuery=new URLSearchParams({scope:"search",family:"search-family",q:"CAFÉ",page:"2",lang:"th"});
+    const contextual=(await get("/api/library/2024S_SEARCH/questions/SEARCH_21?"+contextQuery,owner.cookie)).json();
+    assert.deepEqual(contextual.resultContext.previous,{exam:"2024S_SEARCH",item:"SEARCH_20"});
+    assert.deepEqual(contextual.resultContext.next,{exam:"2024S_SEARCH",item:"SEARCH_22"});
+    assert.equal(contextual.resultContext.position,21);
+    const excluded=(await get("/api/library/GEN/questions/GEN_Q001?"+contextQuery,owner.cookie)).json();
+    assert.equal(excluded.resultContext.position,null);assert.equal(excluded.resultContext.next,null);
+    assert.equal((await get("/api/library/GEN/questions/GEN_Q001",owner.cookie)).statusCode,200);
     // Missing configuration must fail closed, never fall back to admin/email/Section roles.
     config.libraryUserIds = [];
     assert.equal((await get(item,owner.cookie)).statusCode,403);

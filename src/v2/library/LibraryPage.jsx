@@ -4,6 +4,7 @@ import { apiRequest, apiUrl } from '../auth/api.js'
 import { EmptyState, ForbiddenState, LoadingRows, RetryableError } from '../components/StateViews.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import './library.css'
+import LibrarySearch from './LibrarySearch.jsx'
 
 const text = (value, lang) => value?.[lang] || value?.en || value?.th || ''
 const figure = (value, lang) => value?.[lang] || value?.en || value?.th
@@ -11,7 +12,8 @@ const path = (exam, item) => `/v2/library/${encodeURIComponent(exam)}${item ? `/
 
 export default function LibraryPage() {
   const location = useLocation()
-  return <LibraryReader key={location.pathname} />
+  const [params] = useSearchParams()
+  return location.pathname === '/v2/library' && params.get('scope') === 'search' ? <LibrarySearch /> : <LibraryReader key={location.pathname + (params.get('scope') || '')} />
 }
 
 function LibraryReader() {
@@ -26,8 +28,9 @@ function LibraryReader() {
   const rawPage = Number(search.get('page') || 1)
   const page = Number.isInteger(rawPage) && rawPage > 0 && rawPage <= 100000 ? rawPage : 1
   const requestedLang = search.get('lang') === 'en' ? 'en' : 'th'
-  const query = `?page=${page}&lang=${requestedLang}`
-  const endpoint = !examId ? '/api/library' : `/api/library/${encodeURIComponent(examId)}/questions${itemId ? `/${encodeURIComponent(itemId)}` : `?page=${page}`}`
+  const inSearch = search.get('scope') === 'search'
+  const query = inSearch ? `?${search}` : `?page=${page}&lang=${requestedLang}`
+  const endpoint = !examId ? '/api/library' : `/api/library/${encodeURIComponent(examId)}/questions${itemId ? `/${encodeURIComponent(itemId)}${inSearch ? query : ''}` : `?page=${page}`}`
   useEffect(() => {
     let alive = true
     setStatus('loading'); setData(null); setAnswer(null); setAnswerStatus('idle')
@@ -38,17 +41,17 @@ function LibraryReader() {
   const reveal = useCallback(async () => {
     setAnswerStatus('loading')
     try {
-      const result = await apiRequest(`${endpoint}/answer`)
+      const result = await apiRequest(`/api/library/${encodeURIComponent(examId)}/questions/${encodeURIComponent(itemId)}/answer`)
       // Reader is keyed by its URL, so a late answer cannot appear on another item.
       setAnswer(result); setAnswerStatus('ok')
     } catch { setAnswerStatus('error') }
-  }, [endpoint])
+  }, [examId, itemId])
   if (status === 'loading') return <LoadingRows />
   if (status === 'forbidden') return <ForbiddenState />
   if (status === 'missing') return <EmptyState heading={t('libraryMissing')} action={<Link to="/v2/library">{t('libraryTitle')}</Link>} />
   if (status === 'error') return <RetryableError onRetry={() => setAttempt((n) => n + 1)} />
 
-  if (!examId) return <section className="library-page"><h1>{t('libraryTitle')}</h1><p>{t('libraryPrivate')}</p>
+  if (!examId) return <section className="library-page"><h1>{t('libraryTitle')}</h1><p>{t('libraryPrivate')}</p><Link className="v2-btn v2-btn-secondary" to="/v2/library?scope=search&page=1&lang=th">{t('librarySearchTitle')}</Link>
     {data.exams.length === 0 ? <EmptyState heading={t('libraryEmpty')} /> : data.exams.map((exam) => <article className="v2-card" key={exam.id}>
       <h2><Link to={path(exam.id)}>{exam.metadata.title}</Link></h2>
       <p>{exam.metadata.provider} · {exam.metadata.item_count} {t('libraryItems')}</p>
@@ -58,6 +61,8 @@ function LibraryReader() {
   const exam = data.exam
   const meta = exam.metadata
   const lang = meta.languages.includes(requestedLang) ? requestedLang : meta.languages[0]
+  const previous = inSearch ? data.resultContext?.previous : data.previous && {exam:examId,item:data.previous}
+  const next = inSearch ? data.resultContext?.next : data.next && {exam:examId,item:data.next}
   return <section className="library-page">
     <Link to="/v2/library">← {t('libraryTitle')}</Link>
     <h1>{meta.title}</h1>
@@ -76,7 +81,7 @@ function LibraryReader() {
         {page * data.pageSize < data.total && <Link to={`${path(examId)}?page=${page + 1}&lang=${requestedLang}`}>{t('libraryNext')}</Link>}
       </nav>
     </> : <>
-      <Link to={`${path(examId)}${query}`}>← {t('libraryBack')}</Link>
+      <Link to={`${inSearch ? '/v2/library' : path(examId)}${query}`}>← {t('libraryBack')}</Link>
       <article className="v2-card library-question" lang={lang}>
         <h2>{data.question.source_label || `Q${data.question.source_number || data.question.seq}`}</h2>
         <p className="v2-subtext">{data.question.content_id} · {data.question.category || t('libraryUncategorized')} · {t(meta.category_provenance === 'official' ? 'libraryOfficialCategory' : meta.category_provenance === 'unavailable' ? 'libraryUncategorized' : 'libraryCategoryNote')}</p>
@@ -104,8 +109,8 @@ function LibraryReader() {
         </div>}
       </article>
       <nav className="library-actions" aria-label={t('libraryQuestions')}>
-        {data.previous && <Link to={`${path(examId, data.previous)}${query}`}>{t('libraryPrevious')}</Link>}
-        {data.next && <Link to={`${path(examId, data.next)}${query}`}>{t('libraryNext')}</Link>}
+        {previous && <Link to={`${path(previous.exam, previous.item)}${query}`}>{t('libraryPrevious')}</Link>}
+        {next && <Link to={`${path(next.exam, next.item)}${query}`}>{t('libraryNext')}</Link>}
       </nav>
     </>}
     <footer><p>{meta.attribution}</p>

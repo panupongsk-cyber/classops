@@ -16,3 +16,7 @@
 .library-notice { padding: 12px; background: #fff4d9; color: #634700; border-radius: 8px; }
 .library-page details { margin: 12px 0; }
 .library-page summary { cursor: pointer; padding: 8px 0; }
+
+.library-filters {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:1rem;margin:1.5rem 0;}
+.library-filters label {display:flex;flex-direction:column;gap:.35rem;min-width:0;}
+.library-filters input,.library-filters select {width:100%;min-width:0;padding:.6rem;border:1px solid #ccc;border-radius:8px;background:white;color:inherit;}
