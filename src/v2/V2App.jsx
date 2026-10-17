@@ -25,6 +25,7 @@ import AttemptPage from './activities/AttemptPage.jsx'
 import EvidencePage from './activities/EvidencePage.jsx'
 import PlayerPage from './activities/PlayerPage.jsx'
 import PracticeAssignmentsPage from './practice/PracticeAssignmentsPage.jsx'
+import LibraryPage from './library/LibraryPage.jsx'
 import PracticePage from './practice/PracticePage.jsx'
 import PracticeProgressPage from './practice/PracticeProgressPage.jsx'
 import PracticeResultsPage from './practice/PracticeResultsPage.jsx'
@@ -54,6 +55,9 @@ export default function V2App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/v2/checkin" element={<CheckInLandingPage />} />
       <Route path="/v2/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
+      <Route path="/v2/library" element={<ShellRoute><LibraryPage /></ShellRoute>} />
+      <Route path="/v2/library/:examId" element={<ShellRoute><LibraryPage /></ShellRoute>} />
+      <Route path="/v2/library/:examId/:itemId" element={<ShellRoute><LibraryPage /></ShellRoute>} />
       <Route path="/v2/sections" element={<ShellRoute><SectionsPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId" element={<ShellRoute><SectionDetailPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/attendance" element={<ShellRoute><AttendancePage /></ShellRoute>} />

@@ -63,6 +63,7 @@ const baseSchema = z.object({
   MICROSOFT_CLIENT_SECRET: optionalNonEmpty(z.string().min(1)),
   MICROSOFT_REDIRECT_URI: optionalNonEmpty(z.url()),
   ADMIN_GOOGLE_EMAIL: z.email(),
+  LIBRARY_USER_IDS: z.string().default("").transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)).pipe(z.array(z.uuid())),
 });
 
 export interface OAuthClientConfig {
@@ -91,7 +92,7 @@ function resolveOAuthConfig(
   return { clientId: clientId as string, clientSecret: clientSecret as string, redirectUri: redirectUri as string };
 }
 
-export type AppConfig = ReturnType<typeof loadAppConfig>;
+export type AppConfig = Omit<ReturnType<typeof loadAppConfig>, "libraryUserIds"> & { libraryUserIds?: readonly string[] };
 
 export function loadAppConfig() {
   const env = baseSchema.parse(process.env);
@@ -100,6 +101,7 @@ export function loadAppConfig() {
     .filter(Boolean);
 
   return {
+    libraryUserIds: env.LIBRARY_USER_IDS,
     nodeEnv: env.NODE_ENV,
     host: env.HOST,
     port: env.PORT,

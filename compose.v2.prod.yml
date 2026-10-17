@@ -39,6 +39,7 @@ services:
     restart: "no"
     environment:
       NODE_ENV: production
+      LIBRARY_USER_IDS: ${LIBRARY_USER_IDS:-}
       DATABASE_URL: postgresql://classops:${POSTGRES_PASSWORD}@postgres:5432/classops
       APP_BASE_URL: ${APP_BASE_URL}
       TRUSTED_ORIGINS: ${APP_BASE_URL}
@@ -68,6 +69,7 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "3000"
+      LIBRARY_USER_IDS: ${LIBRARY_USER_IDS:-}
       DATABASE_URL: postgresql://classops:${POSTGRES_PASSWORD}@postgres:5432/classops
       APP_BASE_URL: ${APP_BASE_URL}
       TRUSTED_ORIGINS: ${APP_BASE_URL}

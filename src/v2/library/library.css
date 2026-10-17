@@ -1,0 +1,11 @@
+.library-page { max-width: 900px; margin: 0 auto; overflow-wrap: anywhere; }
+.library-page .v2-card { margin: 14px 0; }
+.library-page h1 { font-size: clamp(1.35rem, 3vw, 2rem); }
+.library-page select { font: inherit; padding: 8px; max-width: 100%; }
+.library-text { white-space: pre-wrap; line-height: 1.7; }
+.library-question img { display: block; max-width: 100%; height: auto; margin: 12px 0; }
+.library-options { list-style: none; padding: 0; }
+.library-options li { padding: 12px 0; border-bottom: 1px solid var(--v2-border); }
+.library-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; margin: 20px 0; }
+.library-actions a { padding: 10px 4px; }
+.library-page footer { margin-top: 24px; border-top: 1px solid var(--v2-border); }
