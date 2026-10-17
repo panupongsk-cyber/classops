@@ -83,6 +83,7 @@ function LibraryReader() {
         {data.question.question_type === 'numeric_response' && <p>{t('libraryFreeResponse')}</p>}
         {data.question.voided && <p className="library-notice">{t('libraryVoided')} · {data.question.voided_note}</p>}
         <p className="library-text">{text(data.question.stem, lang) || t('libraryImageItem')}</p>
+        {data.question.answer_in_image && <p className="library-notice">{t('libraryAnswerInImage')}</p>}
         {data.question.representation === 'full_item_image' && <p>{t('libraryFullImage')}</p>}
         {data.question.table && <div className="library-table" role="region" aria-label={t('libraryTable')} tabIndex={0}><table><tbody>{data.question.table.rows.map((row, ri) => <tr key={ri}>{row.map((cell, ci) => ri < data.question.table.header_rows ? <th key={ci} scope="col">{cell}</th> : <td key={ci}>{cell}</td>)}</tr>)}</tbody></table></div>}
         {data.question.image_description && <details><summary>{t('libraryImageDescription')}</summary><p className="library-text">{data.question.image_description}</p></details>}
@@ -98,7 +99,7 @@ function LibraryReader() {
         {answer && <div role="status"><p><strong>{t('libraryAnswer')}: {answer.voided ? t('libraryVoided') : answer.answer || t('libraryNoAnswer')}</strong></p>
           <p>{t('libraryProvenance')}: {meta.answer_key_provenance}</p>
           {answer.answer_alternatives?.length > 0 && <p>{t('libraryAlternatives')}: {answer.answer_alternatives.join(', ')}</p>}
-          {meta.answer_key_note && <p className="library-text">{meta.answer_key_note}</p>}
+          {answer.answer_key_note && <p className="library-text">{answer.answer_key_note}</p>}
           {answer.explanation && <p className="library-text">{text(answer.explanation, lang)}</p>}
         </div>}
       </article>

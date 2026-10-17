@@ -7,6 +7,7 @@ const text=z.object({en:z.string().min(1).optional(),th:z.string().min(1).option
 const refs=z.object({en:id.optional(),th:id.optional()}).strict().nullable();
 const question=z.object({
  content_id:id,seq:z.number().int().positive(),source_number:z.string().min(1),source_label:z.string().nullable().optional(),
+ answer_in_image:z.boolean().optional(),
  question_type:z.enum(["multiple_choice","numeric_response"]),representation:z.enum(["text","image_only","full_item_image"]),
  stem:text,options:z.array(z.object({label:z.string().min(1).max(16),text,figure:refs}).strict()),answer:z.string().nullable(),
  answer_alternatives:z.array(z.string()),voided:z.boolean(),voided_note:z.string().nullable(),category:z.string().nullable(),figure:refs,

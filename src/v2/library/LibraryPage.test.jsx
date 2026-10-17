@@ -43,7 +43,7 @@ test('late answer response cannot reveal a key on the next question', async () =
 
 test('generic reader renders Unicode tables, source caveats and reveals alternative keys only on request', async () => {
   const generic={...detail,exam:{...detail.exam,metadata:{...meta,languages:['th'],category_provenance:'official',source_notes:['Provisional reconstruction'],answer_key_note:'Unverified synthetic note'}},question:{...detail.question,source_number:'19',question_type:'numeric_response',category:null,table:{rows:[['x','y'],['α','β']],header_rows:1},notes:['OCR needs inspection'],options:[]}}
-  apiRequest.mockImplementation(p=>Promise.resolve(p.endsWith('/answer')?{answer:'42',answer_alternatives:['43'],explanation:{th:'อธิบาย'}}:generic))
+  apiRequest.mockImplementation(p=>Promise.resolve(p.endsWith('/answer')?{answer:'42',answer_alternatives:['43'],explanation:{th:'อธิบาย'},answer_key_note:'Reveal-only source note'}:generic))
   show();await screen.findByRole('heading',{name:'Q19'})
   expect(screen.getByRole('table')).toBeTruthy();expect(screen.getByRole('columnheader',{name:'x'})).toBeTruthy()
   expect(screen.getByText('Provisional reconstruction')).toBeTruthy()
@@ -51,13 +51,16 @@ test('generic reader renders Unicode tables, source caveats and reveals alternat
   expect(screen.queryByText(/43/)).toBeNull()
   fireEvent.click(screen.getByRole('button',{name:/เปิดเฉลย|Reveal answer/}))
   await screen.findByText(/43/)
+  expect(screen.getByText('Reveal-only source note')).toBeTruthy()
 })
 test('image-only full items retain eight labels without inventing option text; voided and pending keys are explicit', async () => {
-  const image={...detail,question:{...detail.question,stem:{},representation:'full_item_image',figure:{en:'/source.png'},voided:true,voided_note:'Source voided this question',options:Array.from({length:8},(_,i)=>({label:String(i+1),text:{}}))}}
+  const image={...detail,question:{...detail.question,stem:{},representation:'full_item_image',answer_in_image:true,figure:{en:'/source.png'},voided:true,voided_note:'Source voided this question',options:Array.from({length:8},(_,i)=>({label:String(i+1),text:{}}))}}
   apiRequest.mockImplementation(p=>Promise.resolve(p.endsWith('/answer')?{answer:null,voided:true}:image))
   show();await screen.findByText(/Source voided/)
   expect(screen.getAllByText(/ดูตัวเลือกในภาพต้นฉบับ|See this choice in the source image/)).toHaveLength(8)
   expect(screen.getByRole('img').getAttribute('src')).toBe('/source.png')
+  expect(screen.getByText(/ภาพต้นฉบับมีเฉลยอยู่ในภาพ|The original image includes the answer/)).toBeTruthy()
+  expect(screen.queryByRole('status')).toBeNull()
   fireEvent.click(screen.getByRole('button',{name:/เปิดเฉลย|Reveal answer/}))
   await waitFor(()=>expect(screen.getByRole('status').textContent).toMatch(/ข้อสอบยกเลิก|Voided/))
 })

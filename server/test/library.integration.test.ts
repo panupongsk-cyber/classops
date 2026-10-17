@@ -108,10 +108,14 @@ test("private global library: isolated import, no implicit admin access, hidden 
     const generic="/api/library/GEN/questions/GEN_Q001";
     const numeric=(await get(generic,owner.cookie)).json();
     assert.equal(numeric.question.source_number,"19");
+    assert.ok(!("answer_key_note" in numeric.exam.metadata),"key notes are not initial metadata");
+    assert.ok(!("answer_key_note" in (await get("/api/library/GEN/questions",owner.cookie)).json().exam.metadata));
+    assert.ok((await get("/api/library",owner.cookie)).json().exams.every((e:{metadata:Record<string,unknown>})=>!("answer_key_note" in e.metadata)));
+    assert.equal((await get(generic+"/answer",owner.cookie)).json().answer_key_note,"Synthetic source note");
     assert.ok(!("answer" in numeric.question)&&!("answer_alternatives" in numeric.question)&&!("explanation" in numeric.question));
     assert.deepEqual((await get(generic+"/answer",owner.cookie)).json().answer_alternatives,["43"]);
     const image=(await get("/api/library/GEN/questions/GEN_Q002",owner.cookie)).json().question;
-    assert.equal(image.options.length,8);assert.equal(image.representation,"full_item_image");
+    assert.equal(image.answer_in_image,true);assert.equal(image.options.length,8);assert.equal(image.representation,"full_item_image");
     assert.match(image.figure.en,/^\/api\/library\/GEN\/figures\//);
     const table=(await get("/api/library/GEN/questions/GEN_Q003",owner.cookie)).json().question;
     assert.deepEqual(table.table.rows,[["x","y"],["α","β"]]);assert.equal(table.options[0].label,"ก");

@@ -5,6 +5,7 @@
 export const translations = {
   th: {
     libraryImageItem: "อ่านโจทย์จากภาพต้นฉบับ",
+    libraryAnswerInImage: "ภาพต้นฉบับมีเฉลยอยู่ในภาพ ปุ่มซ่อนเฉลยไม่สามารถซ่อนส่วนนี้ได้",
     libraryFullImage: "ภาพรวมโจทย์และตัวเลือกทั้งหมดไว้แล้ว",
     libraryUncategorized: "ยังไม่จัดหมวด",
     libraryOfficialCategory: "หมวดตามต้นฉบับทางการ",
@@ -745,6 +746,7 @@ export const translations = {
   },
   en: {
     libraryImageItem: "Read this item in the source image",
+    libraryAnswerInImage: "The original image includes the answer. Hiding the answer text cannot hide it in the image.",
     libraryFullImage: "The image contains the complete stem and answer choices",
     libraryUncategorized: "Uncategorized",
     libraryOfficialCategory: "Official source category",
