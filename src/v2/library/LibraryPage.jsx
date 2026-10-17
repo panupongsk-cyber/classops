@@ -69,7 +69,7 @@ function LibraryReader() {
     {!itemId ? <>
       <p>{data.total} {t('libraryItems')} · {t('libraryPage')} {page}</p>
       {data.questions.length === 0 ? <EmptyState heading={t('libraryNoItems')} /> : data.questions.map((q) => <article className="v2-card" key={q.source_id}>
-        <Link to={`${path(examId, q.source_id)}${query}`}>Q{q.seq} · {text(q.stem, lang)}</Link>
+        <Link to={`${path(examId, q.source_id)}${query}`}>{q.source_label || `Q${q.source_number || q.seq}`} · {text(q.stem, lang) || t('libraryImageItem')}</Link>
       </article>)}
       <nav className="library-actions" aria-label={t('libraryPages')}>
         {page > 1 && <Link to={`${path(examId)}?page=${page - 1}&lang=${requestedLang}`}>{t('libraryPrevious')}</Link>}
@@ -78,18 +78,28 @@ function LibraryReader() {
     </> : <>
       <Link to={`${path(examId)}${query}`}>← {t('libraryBack')}</Link>
       <article className="v2-card library-question" lang={lang}>
-        <h2>Q{data.question.seq}</h2><p className="v2-subtext">{data.question.content_id} · {data.question.category} · {t('libraryCategoryNote')}</p>
-        <p className="library-text">{text(data.question.stem, lang)}</p>
+        <h2>{data.question.source_label || `Q${data.question.source_number || data.question.seq}`}</h2>
+        <p className="v2-subtext">{data.question.content_id} · {data.question.category || t('libraryUncategorized')} · {t(meta.category_provenance === 'official' ? 'libraryOfficialCategory' : meta.category_provenance === 'unavailable' ? 'libraryUncategorized' : 'libraryCategoryNote')}</p>
+        {data.question.question_type === 'numeric_response' && <p>{t('libraryFreeResponse')}</p>}
+        {data.question.voided && <p className="library-notice">{t('libraryVoided')} · {data.question.voided_note}</p>}
+        <p className="library-text">{text(data.question.stem, lang) || t('libraryImageItem')}</p>
+        {data.question.answer_in_image && <p className="library-notice">{t('libraryAnswerInImage')}</p>}
+        {data.question.representation === 'full_item_image' && <p>{t('libraryFullImage')}</p>}
+        {data.question.table && <div className="library-table" role="region" aria-label={t('libraryTable')} tabIndex={0}><table><tbody>{data.question.table.rows.map((row, ri) => <tr key={ri}>{row.map((cell, ci) => ri < data.question.table.header_rows ? <th key={ci} scope="col">{cell}</th> : <td key={ci}>{cell}</td>)}</tr>)}</tbody></table></div>}
+        {data.question.image_description && <details><summary>{t('libraryImageDescription')}</summary><p className="library-text">{data.question.image_description}</p></details>}
+        {data.question.notes?.length > 0 && <details><summary>{t('libraryItemNotes')}</summary>{data.question.notes.map((note, i) => <p className="library-text" key={i}>{note}</p>)}</details>}
         {figure(data.question.figure, lang) && <img src={apiUrl(figure(data.question.figure, lang))} alt={`${t('libraryFigure')} Q${data.question.seq}`} />}
         <ol className="library-options">{data.question.options.map((o) => <li key={o.label}>
-          <strong>{o.label}) </strong>{figure(o.figure, lang) ? <img src={apiUrl(figure(o.figure, lang))} alt={text(o.text, lang) || `${t('libraryFigure')} ${o.label}`} /> : <span className="library-text">{text(o.text, lang)}</span>}
+          <strong>{o.label}) </strong>{figure(o.figure, lang) ? <img src={apiUrl(figure(o.figure, lang))} alt={text(o.text, lang) || `${t('libraryFigure')} ${o.label}`} /> : <span className="library-text">{text(o.text, lang) || t('libraryOptionInImage')}</span>}
         </li>)}</ol>
         <button type="button" className="v2-btn v2-btn-secondary" disabled={answerStatus === 'loading'} onClick={() => { if (answer) { setAnswer(null); setAnswerStatus('idle') } else reveal() }}>
           {t(answer ? 'libraryHideAnswer' : answerStatus === 'loading' ? 'libraryLoadingAnswer' : 'libraryRevealAnswer')}
         </button>
         {answerStatus === 'error' && <RetryableError onRetry={reveal} />}
-        {answer && <div role="status"><p><strong>{t('libraryAnswer')}: {answer.answer || t('libraryNoAnswer')}</strong></p>
+        {answer && <div role="status"><p><strong>{t('libraryAnswer')}: {answer.voided ? t('libraryVoided') : answer.answer || t('libraryNoAnswer')}</strong></p>
           <p>{t('libraryProvenance')}: {meta.answer_key_provenance}</p>
+          {answer.answer_alternatives?.length > 0 && <p>{t('libraryAlternatives')}: {answer.answer_alternatives.join(', ')}</p>}
+          {answer.answer_key_note && <p className="library-text">{answer.answer_key_note}</p>}
           {answer.explanation && <p className="library-text">{text(answer.explanation, lang)}</p>}
         </div>}
       </article>
@@ -98,6 +108,7 @@ function LibraryReader() {
         {data.next && <Link to={`${path(examId, data.next)}${query}`}>{t('libraryNext')}</Link>}
       </nav>
     </>}
-    <footer><p>{meta.attribution}</p><p className="v2-subtext">{t('libraryRevision')}: {exam.revision}<br />{exam.source_path} · {exam.source_commit}</p></footer>
+    <footer><p>{meta.attribution}</p>
+      {(meta.source_notes?.length > 0 || meta.category_note) && <details><summary>{t('librarySourceNotes')}</summary>{meta.source_notes?.map((note,i) => <p className="library-text" key={i}>{note}</p>)}{meta.category_note && <p>{meta.category_note}</p>}</details>}<p className="v2-subtext">{t('libraryRevision')}: {exam.revision}<br />{exam.source_path} · {exam.source_commit}</p></footer>
   </section>
 }
