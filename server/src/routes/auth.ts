@@ -17,6 +17,7 @@ export async function registerAuthRoutes(
     if (!user) return reply.code(401).send({ error: "UNAUTHENTICATED" });
     return reply.send({
       user: {
+        canBrowseLibrary: config.libraryUserIds?.includes(user.id) ?? false,
         id: user.id,
         email: user.email,
         displayName: user.displayName,

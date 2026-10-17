@@ -99,6 +99,7 @@ export default function AppShell({ children, sectionLabel }) {
           <Link to="/v2/sections" className={`v2-navitem ${location.pathname === '/v2/sections' ? 'is-active' : ''}`}>
             {t('navSections')}
           </Link>
+          {user?.canBrowseLibrary && <Link to="/v2/library" className={`v2-navitem ${location.pathname.startsWith('/v2/library') ? 'is-active' : ''}`}>{t('libraryTitle')}</Link>}
           {sectionId ? (
             <>
               <Link to={`/v2/sections/${sectionId}`} className={`v2-navitem ${onMembershipRoute ? 'is-active' : ''}`}>
