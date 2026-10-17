@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react'
 import {Link,useSearchParams} from 'react-router-dom'
 import {apiRequest} from '../auth/api.js'
+import LibraryPublication from './LibraryPublication.jsx'
 import {useI18n} from '../i18n/I18nContext.jsx'
 import {ForbiddenState,LoadingRows,RetryableError} from '../components/StateViews.jsx'
 const fields=['q','family','exam','year','category','language','answer']
@@ -19,7 +20,7 @@ export default function LibrarySearch(){
  const names={family:'libraryFamily',exam:'librarySet',year:'libraryYear',category:'libraryCategory',language:'libraryAvailableLanguage',answer:'libraryKeyStatus'}
  const pageLink=(n)=>{const next=new URLSearchParams(params);next.set('page',String(n));return '/v2/library?'+next}
  return <section className="library-page">
-  <Link to="/v2/library">← {t('libraryTitle')}</Link><h1>{t('librarySearchTitle')}</h1><p>{t('librarySearchHelp')}</p>
+  <Link to="/v2/library">← {t('libraryTitle')}</Link><h1>{t('librarySearchTitle')}</h1>{data&&<LibraryPublication publication={data.publication}/>} <p>{t('librarySearchHelp')}</p>
   <form className="library-filters" onSubmit={e=>{e.preventDefault();go(draft)}}>
    <label>{t('librarySearchText')}<input name="q" maxLength={200} value={draft.q} onChange={e=>setDraft({...draft,q:e.target.value})}/></label>
    {Object.keys(names).map(k=><label key={k}>{t(names[k])}<select name={k} value={draft[k]} onChange={e=>setDraft({...draft,[k]:e.target.value})}><option value="">{t('libraryAll')}</option>{choices[k].map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>)}

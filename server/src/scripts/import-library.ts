@@ -6,7 +6,7 @@ import { loadAppConfig } from "../config.js";
 import { createDatabasePool, withTransaction, type DatabasePool } from "../db.js";
 import { validateLibraryPackage, type LibraryPackage } from "../library/package.js";
 
-// Only schema enrichment is allowed here; correction/version activation belongs to T4.
+// Legacy initial import is available until managed release activation takes ownership.
 function questionCore(q: Record<string, unknown>) {
   const options = (q.options as Record<string,unknown>[]).map(o => ({label:o.label,text:o.text,figure:o.figure ?? null}));
   return {content_id:q.content_id,seq:q.seq,stem:q.stem,options,answer:q.answer,category:q.category ?? null,
@@ -26,6 +26,8 @@ export async function importLibraryPackage(pool: DatabasePool, raw: unknown) {
   const { paper } = pkg;
   const id = paper.exam.content_id;
   return withTransaction(pool, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('library:publication'))");
+    if((await client.query('SELECT 1 FROM library_release_state WHERE singleton')).rowCount)throw Error('Managed releases active; use publish-library preview/activate');
     // Serialize imports even when the paper does not yet have a row.
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`library:${id}`]);
     const existing = (await client.query<{ revision: string }>("SELECT revision FROM library_exams WHERE source_id=$1", [id])).rows[0];

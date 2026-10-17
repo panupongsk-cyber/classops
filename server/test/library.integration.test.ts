@@ -83,7 +83,8 @@ test("private global library: isolated import, no implicit admin access, hidden 
     const detail = (await get(item,owner.cookie)).json();
     assert.ok(!('answer' in detail.question) && !('explanation' in detail.question));
     assert.deepEqual([detail.previous,detail.next], [null,"2099S_XX_Q002"]);
-    assert.equal(detail.question.options[0].figure.en,fig);
+    assert.equal(detail.question.options[0].figure.en,fig+"?revision="+detail.exam.revision);
+    assert.equal((await get(detail.question.options[0].figure.en,owner.cookie)).statusCode,200);
     const key = (await get(`${item}/answer`,owner.cookie)).json();
     assert.equal(key.answer,"b"); assert.equal(key.explanation.en,"Synthetic explanation");
     assert.ok((await get(fig,owner.cookie)).rawPayload.equals(TINY_PNG));

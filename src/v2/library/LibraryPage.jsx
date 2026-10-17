@@ -5,6 +5,7 @@ import { EmptyState, ForbiddenState, LoadingRows, RetryableError } from '../comp
 import { useI18n } from '../i18n/I18nContext.jsx'
 import './library.css'
 import LibrarySearch from './LibrarySearch.jsx'
+import LibraryPublication from './LibraryPublication.jsx'
 
 const text = (value, lang) => value?.[lang] || value?.en || value?.th || ''
 const figure = (value, lang) => value?.[lang] || value?.en || value?.th
@@ -35,23 +36,26 @@ function LibraryReader() {
     let alive = true
     setStatus('loading'); setData(null); setAnswer(null); setAnswerStatus('idle')
     apiRequest(endpoint).then((result) => { if (alive) { setData(result); setStatus('ok') } })
-      .catch((error) => { if (alive) setStatus(error.status === 403 ? 'forbidden' : error.status === 404 ? 'missing' : 'error') })
+      .catch((error) => { if (alive) setStatus(error.status === 403 ? 'forbidden' : error.status === 410 ? 'unavailable' : error.status === 404 ? 'missing' : 'error') })
     return () => { alive = false }
   }, [endpoint, attempt])
   const reveal = useCallback(async () => {
     setAnswerStatus('loading')
     try {
-      const result = await apiRequest(`/api/library/${encodeURIComponent(examId)}/questions/${encodeURIComponent(itemId)}/answer`)
+      const revision=data?.exam?.revision
+      const suffix=/^[a-f0-9]{64}$/.test(revision||'')?`?revision=${revision}`:''
+      const result = await apiRequest(`/api/library/${encodeURIComponent(examId)}/questions/${encodeURIComponent(itemId)}/answer${suffix}`)
       // Reader is keyed by its URL, so a late answer cannot appear on another item.
       setAnswer(result); setAnswerStatus('ok')
-    } catch { setAnswerStatus('error') }
-  }, [examId, itemId])
+    } catch(error) { setAnswerStatus(error.status===409?'stale':'error') }
+  }, [examId, itemId, data])
   if (status === 'loading') return <LoadingRows />
   if (status === 'forbidden') return <ForbiddenState />
+  if (status === 'unavailable') return <EmptyState heading={t('libraryUnavailable')} action={<Link to="/v2/library">{t('libraryTitle')}</Link>} />
   if (status === 'missing') return <EmptyState heading={t('libraryMissing')} action={<Link to="/v2/library">{t('libraryTitle')}</Link>} />
   if (status === 'error') return <RetryableError onRetry={() => setAttempt((n) => n + 1)} />
 
-  if (!examId) return <section className="library-page"><h1>{t('libraryTitle')}</h1><p>{t('libraryPrivate')}</p><Link className="v2-btn v2-btn-secondary" to="/v2/library?scope=search&page=1&lang=th">{t('librarySearchTitle')}</Link>
+  if (!examId) return <section className="library-page"><h1>{t('libraryTitle')}</h1><p>{t('libraryPrivate')}</p><LibraryPublication publication={data.publication}/><Link className="v2-btn v2-btn-secondary" to="/v2/library?scope=search&page=1&lang=th">{t('librarySearchTitle')}</Link>
     {data.exams.length === 0 ? <EmptyState heading={t('libraryEmpty')} /> : data.exams.map((exam) => <article className="v2-card" key={exam.id}>
       <h2><Link to={path(exam.id)}>{exam.metadata.title}</Link></h2>
       <p>{exam.metadata.provider} · {exam.metadata.item_count} {t('libraryItems')}</p>
@@ -65,7 +69,7 @@ function LibraryReader() {
   const next = inSearch ? data.resultContext?.next : data.next && {exam:examId,item:data.next}
   return <section className="library-page">
     <Link to="/v2/library">← {t('libraryTitle')}</Link>
-    <h1>{meta.title}</h1>
+    <h1>{meta.title}</h1><LibraryPublication publication={data.publication}/>
     <label>{t('libraryLanguage')} <select value={requestedLang} onChange={(e) => { const next = new URLSearchParams(search); next.set('lang', e.target.value); setSearch(next, { replace: true }) }}>
       <option value="th">ไทย</option><option value="en">English</option>
     </select></label>
@@ -100,6 +104,7 @@ function LibraryReader() {
         <button type="button" className="v2-btn v2-btn-secondary" disabled={answerStatus === 'loading'} onClick={() => { if (answer) { setAnswer(null); setAnswerStatus('idle') } else reveal() }}>
           {t(answer ? 'libraryHideAnswer' : answerStatus === 'loading' ? 'libraryLoadingAnswer' : 'libraryRevealAnswer')}
         </button>
+        {answerStatus === 'stale' && <div role="alert"><p>{t('libraryRevisionChanged')}</p><button type="button" onClick={()=>setAttempt(n=>n+1)}>{t('libraryReload')}</button></div>}
         {answerStatus === 'error' && <RetryableError onRetry={reveal} />}
         {answer && <div role="status"><p><strong>{t('libraryAnswer')}: {answer.voided ? t('libraryVoided') : answer.answer || t('libraryNoAnswer')}</strong></p>
           <p>{t('libraryProvenance')}: {meta.answer_key_provenance}</p>
