@@ -64,3 +64,12 @@ test('image-only full items retain eight labels without inventing option text; v
   fireEvent.click(screen.getByRole('button',{name:/เปิดเฉลย|Reveal answer/}))
   await waitFor(()=>expect(screen.getByRole('status').textContent).toMatch(/ข้อสอบยกเลิก|Voided/))
 })
+
+test('active publication is visible, removed items are meaningful, and stale keys require reload',async()=>{
+  const revision='a'.repeat(64)
+  apiRequest.mockImplementation(p=>p.includes('/answer')?Promise.reject({status:409}):Promise.resolve({...detail,exam:{...detail.exam,revision},publication:{revision,activated_at:'2026-10-18T00:00:00Z'}}))
+  show();await screen.findByText('โจทย์สังเคราะห์');expect(screen.getByText(revision)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button',{name:/เปิดเฉลย|Reveal answer/}));await screen.findByRole('alert')
+  expect(screen.getByRole('button',{name:/โหลดข้อมูลใหม่|Reload question/})).toBeTruthy();expect(screen.queryByRole('status')).toBeNull()
+  cleanup();apiRequest.mockRejectedValue({status:410});show();await screen.findByText(/ไม่มีในรุ่นคลังปัจจุบัน|unavailable in the active library/)
+})

@@ -1,3 +1,6 @@
+import {packageHash} from '../src/activities/engine.js';
+import {manifest,preparePackages,previewRelease,activateRelease} from '../src/library/publication.js';
+import {syntheticLibraryPackage} from './fixtures/synthetic-library.js';
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -154,6 +157,20 @@ test("Practice assignments: staff create, fixed sets, start/resume, due rules, r
     assert.deepEqual(staffRow.progress, { started: 1, submitted: 1 });
     await post(teacher, `/api/practice-assignments/${mock.id}/attempts`); // a teacher's preview
     assert.deepEqual((await get(teacher, list)).json().assignments.find((a: { id: string }) => a.id === mock.id).progress, { started: 1, submitted: 1 }, "staff previews are not progress");
+
+    // Library correction/restore cannot rewrite persisted Practice scores, answers or graded locks.
+    const library=preparePackages([syntheticLibraryPackage()]);
+    const practiceSnapshot=async()=>JSON.stringify((await pool.query("SELECT * FROM (SELECT 'attempts' AS kind,to_jsonb(t) AS row_json FROM practice_attempts t UNION ALL SELECT 'answers',to_jsonb(a) FROM practice_answers a UNION ALL SELECT 'questions',to_jsonb(q) FROM practice_questions q UNION ALL SELECT 'assignments',to_jsonb(s) FROM practice_assignments s) snapshot ORDER BY kind,row_json::text")).rows);
+    const practiceBefore=await practiceSnapshot();
+    const initialPreview=await previewRelease(pool,library);
+    await activateRelease(pool,library,{expectedActive:initialPreview.expected_active,targetRevision:library.revision,approvalDigest:packageHash(manifest(library)),operator:'synthetic-lock-test',reason:'Library activation during a graded Practice lock'});
+    const revised=syntheticLibraryPackage();revised.paper.questions[0]!.answer='99';const correction=preparePackages([revised]);
+    await activateRelease(pool,correction,{expectedActive:library.revision,targetRevision:correction.revision,approvalDigest:packageHash(manifest(correction)),operator:'synthetic-lock-test',reason:'Synthetic library key correction'});
+    await activateRelease(pool,library.revision,{expectedActive:correction.revision,targetRevision:library.revision,approvalDigest:packageHash(manifest(library)),operator:'synthetic-lock-test',reason:'Restore previous library key'});
+    assert.equal(await practiceSnapshot(),practiceBefore,'Practice rows byte-equivalent after library lifecycle');
+    assert.equal((await get(alice, `${practice}/exams/${examA}/questions?limit=1`)).json().questions[0].locked,true);
+    assert.deepEqual([(await get(alice,aUrl)).json().result.correct,(await get(alice,aUrl)).json().review],[2,null]);
+    await pool.query('TRUNCATE library_release_state,library_activation_history,library_release_papers,library_releases,library_paper_revisions,library_media_blobs,library_exams CASCADE');
 
     // Just past the due date, a timed attempt started before it may still run (up to the 10-minute
     // limit plus grace): starts stop, but the key stays locked and the review closed until then.

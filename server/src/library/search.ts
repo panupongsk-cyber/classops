@@ -36,7 +36,7 @@ export function searchSql(query:SearchQuery){
  if(query.answer)where.push(`${answer}=${bind(query.answer)}`);
  return {sql:searchBase+(where.length?' WHERE '+where.join(' AND '):''),values};
 }
-export async function searchLibrary(pool:DatabasePool,query:SearchQuery){
+export async function searchLibrary(pool:Pick<DatabasePool,'query'>,query:SearchQuery){
  const {sql,values}=searchSql(query);
  const total=Number((await pool.query(`SELECT count(*) FROM (${sql}) matches`,values)).rows[0].count);
  const questions=(await pool.query(`${sql} ORDER BY q.exam_id COLLATE "C",q.seq,q.source_id COLLATE "C" LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,SEARCH_PAGE_SIZE,(query.page-1)*SEARCH_PAGE_SIZE])).rows;
@@ -44,7 +44,7 @@ export async function searchLibrary(pool:DatabasePool,query:SearchQuery){
  const facets=(await pool.query(`SELECT DISTINCT exam_id,title,family,year,category_key,category,has_en,has_th,answer_status FROM (${searchBase}) all_items ORDER BY exam_id`)).rows;
  return {questions,total,page:query.page,pageSize:SEARCH_PAGE_SIZE,facets};
 }
-export async function searchNeighbors(pool:DatabasePool,query:SearchQuery,exam:string,item:string){
+export async function searchNeighbors(pool:Pick<DatabasePool,'query'>,query:SearchQuery,exam:string,item:string){
  const {sql,values}=searchSql(query);
  const rows=(await pool.query(`SELECT exam_id,source_id FROM (${sql}) matches ORDER BY exam_id COLLATE "C",seq,source_id COLLATE "C"`,values)).rows;
  const index=rows.findIndex(r=>r.exam_id===exam&&r.source_id===item);
