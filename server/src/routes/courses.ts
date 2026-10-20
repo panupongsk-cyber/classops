@@ -7,6 +7,7 @@ import type { AppConfig } from "../config.js";
 import { requireCurrentUser } from "../current-user.js";
 import type { DatabasePool } from "../db.js";
 import { withTransaction } from "../db.js";
+import { sectionDeletionBlockers, type DeletionBlocker } from "../section-deletion.js";
 
 // Suspended users cannot become a Section owner (as in the admin owner reassignment). An unknown
 // id is left to the membership foreign key, which answers OWNER_USER_NOT_FOUND.
@@ -187,5 +188,55 @@ export async function registerCourseRoutes(
       }
       throw error;
     }
+  });
+
+  // Deleting a Course cascades to every Section it owns, and from there to all Section data, so it
+  // stays platform-admin-only (creation is too) and is guarded Section by Section: one Section
+  // that still has teaching data or another member refuses the whole delete.
+  app.delete("/api/courses/:courseId", async (request, reply) => {
+    const user = await requireCurrentUser(request, reply, pool, config);
+    if (!user) return;
+    if (!user.isPlatformAdmin) return reply.code(403).send({ error: "FORBIDDEN" });
+    const { courseId } = request.params as { courseId: string };
+
+    const outcome = await withTransaction(pool, async (client) => {
+      const course = await client.query<{ code: string; title: string }>(
+        "SELECT code, title FROM courses WHERE id = $1 FOR UPDATE",
+        [courseId],
+      );
+      if (!course.rowCount) {
+        return { status: 404 as const, body: { error: "COURSE_NOT_FOUND" } };
+      }
+      const sections = await client.query<{ id: string; term: string; label: string }>(
+        "SELECT id, term, label FROM sections WHERE course_id = $1 ORDER BY term, label",
+        [courseId],
+      );
+
+      const blocked: Array<{ sectionId: string; term: string; label: string; blockers: DeletionBlocker[] }> = [];
+      for (const section of sections.rows) {
+        const blockers = await sectionDeletionBlockers(client, section.id, user.id);
+        if (blockers.length > 0) {
+          blocked.push({ sectionId: section.id, term: section.term, label: section.label, blockers });
+        }
+      }
+      if (blocked.length > 0) {
+        return { status: 409 as const, body: { error: "COURSE_NOT_EMPTY", sections: blocked } };
+      }
+
+      await client.query("DELETE FROM courses WHERE id = $1", [courseId]);
+      await client.query(
+        `INSERT INTO audit_log (actor_user_id, event_type, subject_type, subject_id, metadata)
+         VALUES ($1, 'course.deleted', 'course', $2, $3::jsonb)`,
+        [
+          user.id,
+          courseId,
+          JSON.stringify({ code: course.rows[0]!.code, title: course.rows[0]!.title, sections: sections.rowCount }),
+        ],
+      );
+      return { status: 204 as const, body: null };
+    });
+
+    if (outcome.status === 204) return reply.code(204).send();
+    return reply.code(outcome.status).send(outcome.body);
   });
 }

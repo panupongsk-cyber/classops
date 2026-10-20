@@ -33,6 +33,12 @@ export function getCourse(courseId) {
   return apiRequest(`/api/courses/${courseId}`)
 }
 
+// Guarded: the server refuses with 409 SECTION_NOT_EMPTY (and a `blockers` list) while the Section
+// still holds teaching data or another member.
+export function deleteSection(sectionId) {
+  return apiRequest(`/api/sections/${sectionId}`, { method: 'DELETE' })
+}
+
 export function regenerateJoinCode(sectionId) {
   return apiRequest(`/api/sections/${sectionId}/join-code/regenerate`, { method: 'POST' })
 }

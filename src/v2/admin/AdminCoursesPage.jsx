@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import { LoadingRows, RetryableError } from '../components/StateViews.jsx'
-import { listAdminCourses, listAdminUsers, reassignSectionOwner, resetSectionJoinCode } from './api.js'
+import { deleteCourse, listAdminCourses, listAdminUsers, reassignSectionOwner, resetSectionJoinCode } from './api.js'
+import { courseDeleteError } from '../sections/deletion.js'
 
 export default function AdminCoursesPage() {
   const { t } = useI18n()
@@ -28,6 +29,10 @@ export default function AdminCoursesPage() {
 
   const [modalPending, setModalPending] = useState(false)
   const [modalError, setModalError] = useState(null)
+
+  // Guarded course delete: the server refuses while any of the Course's Sections still holds data.
+  const [deletingCourseId, setDeletingCourseId] = useState(null)
+  const [deleteError, setDeleteError] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -136,6 +141,21 @@ export default function AdminCoursesPage() {
     }
   }
 
+  async function handleDeleteCourse(course) {
+    if (deletingCourseId) return
+    if (!window.confirm(t('courseDeleteConfirm', { title: `${course.code} — ${course.title}` }))) return
+    setDeleteError(null)
+    setDeletingCourseId(course.id)
+    try {
+      await deleteCourse(course.id)
+      setCourses((prev) => prev.filter((entry) => entry.id !== course.id))
+    } catch (err) {
+      setDeleteError(courseDeleteError(t, err))
+    } finally {
+      setDeletingCourseId(null)
+    }
+  }
+
   async function openOwnerModal(course, section) {
     setOwnerModalSection({ course, section })
     setSelectedOwnerUserId(section.owner?.id || '')
@@ -226,6 +246,12 @@ export default function AdminCoursesPage() {
         </div>
       </div>
 
+      {deleteError && (
+        <div className="v2-card" style={{ border: '1px solid #dc2626', marginBottom: 16 }}>
+          <p className="v2-field-error" style={{ margin: 0 }}>{deleteError}</p>
+        </div>
+      )}
+
       {/* Content */}
       {loading && <LoadingRows rows={5} />}
       {error && !loading && <RetryableError onRetry={load} />}
@@ -283,13 +309,24 @@ export default function AdminCoursesPage() {
                     {course.type}
                   </span>
                 </div>
-                <Link
-                  to={`/v2/courses/${course.id}/sections/new`}
-                  className="v2-btn v2-btn-sm v2-btn-secondary"
-                  style={{ fontSize: '.8rem' }}
-                >
-                  + {t('addSectionCta')}
-                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Link
+                    to={`/v2/courses/${course.id}/sections/new`}
+                    className="v2-btn v2-btn-sm v2-btn-secondary"
+                    style={{ fontSize: '.8rem' }}
+                  >
+                    + {t('addSectionCta')}
+                  </Link>
+                  <button
+                    type="button"
+                    className="v2-btn v2-btn-sm v2-btn-danger"
+                    style={{ fontSize: '.8rem' }}
+                    onClick={() => handleDeleteCourse(course)}
+                    disabled={deletingCourseId === course.id}
+                  >
+                    {t('courseDeleteButton')}
+                  </button>
+                </div>
               </div>
 
               {/* Sections Table */}
