@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useV2Auth } from '../auth/V2AuthContext.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import { ForbiddenState, LoadingRows, RetryableError, RoleBadges } from '../components/StateViews.jsx'
@@ -8,7 +8,8 @@ import CheckInCard from '../attendance/CheckInCard.jsx'
 import ExitTicketStudentCard from '../attendance/ExitTicketStudentCard.jsx'
 import RosterImportCard from './RosterImportCard.jsx'
 import StudentIdCard from './StudentIdCard.jsx'
-import { getCourse, getSection, inviteMember, listMemberships, regenerateJoinCode, removeMember } from './api.js'
+import { deleteSection, getCourse, getSection, inviteMember, listMemberships, regenerateJoinCode, removeMember } from './api.js'
+import { sectionDeleteError } from './deletion.js'
 
 const MANAGER_ROLES = ['owner', 'teacher', 'ta']
 
@@ -58,11 +59,16 @@ export default function SectionDetailPage() {
 
 function ManagerView({ data, myRoles, isPlatformAdmin, onChanged }) {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const { section, course, memberships } = data
   // A platform admin may do both server-side (sections.ts, memberships.ts) without being a member.
   const canRegenerate = isPlatformAdmin || myRoles.includes('owner') || myRoles.includes('teacher')
   const canGrantOwner = isPlatformAdmin || myRoles.includes('owner')
+  // Deleting cascades to every child table, so it stays with the Section owner (and admins).
+  const canDelete = isPlatformAdmin || myRoles.includes('owner')
 
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
   const [copied, setCopied] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -110,6 +116,21 @@ function ManagerView({ data, myRoles, isPlatformAdmin, onChanged }) {
     if (!window.confirm(t('removeConfirm'))) return
     await removeMember(section.id, targetUserId, targetRoles)
     onChanged()
+  }
+
+  async function handleDelete() {
+    if (deleting) return
+    if (!window.confirm(t('sectionDeleteConfirm', { label: sectionHeading(course, section) }))) return
+    setDeleteError(null)
+    setDeleting(true)
+    try {
+      await deleteSection(section.id)
+      navigate('/v2/sections')
+    } catch (err) {
+      setDeleteError(sectionDeleteError(t, err))
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -189,6 +210,22 @@ function ManagerView({ data, myRoles, isPlatformAdmin, onChanged }) {
           ))}
         </tbody>
       </table>
+
+      {canDelete && (
+        <div className="v2-card" style={{ marginTop: 24, border: '1px solid #dc2626' }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('sectionDeleteHeading')}</div>
+          <p className="v2-subtext" style={{ marginTop: 0 }}>{t('sectionDeleteBody')}</p>
+          <button
+            type="button"
+            className="v2-btn v2-btn-danger"
+            onClick={handleDelete}
+            disabled={deleting}
+          >
+            {deleting ? t('sectionDeleteDeleting') : t('sectionDeleteButton')}
+          </button>
+          {deleteError && <p className="v2-field-error" style={{ marginBottom: 0 }}>{deleteError}</p>}
+        </div>
+      )}
     </div>
   )
 }

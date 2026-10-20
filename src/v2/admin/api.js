@@ -32,6 +32,11 @@ export function listAdminCourses() {
   return apiRequest('/api/admin/courses')
 }
 
+// Guarded: refuses with 409 COURSE_NOT_EMPTY when any of the Course's Sections still holds data.
+export function deleteCourse(courseId) {
+  return apiRequest(`/api/courses/${courseId}`, { method: 'DELETE' })
+}
+
 export function reassignSectionOwner(sectionId, newOwnerUserId) {
   return apiRequest(`/api/admin/sections/${sectionId}/owner`, {
     method: 'PATCH',

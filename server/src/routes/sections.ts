@@ -7,7 +7,8 @@ import { getSectionRoles, hasAnyRole } from "../authz.js";
 import { claimRosterByStudentId } from "./roster.js";
 import type { AppConfig } from "../config.js";
 import { requireCurrentUser } from "../current-user.js";
-import type { DatabasePool } from "../db.js";
+import { withTransaction, type DatabasePool } from "../db.js";
+import { sectionDeletionBlockers } from "../section-deletion.js";
 
 // Learner-entered student ID (not treated as sensitive, but only ever shown to Section managers).
 const studentIdSchema = z.string().trim().regex(/^[0-9A-Za-z-]{1,32}$/);
@@ -69,6 +70,43 @@ export async function registerSectionRoutes(
     );
     if (!result.rowCount) return reply.code(404).send({ error: "SECTION_NOT_FOUND" });
     return reply.send({ section: result.rows[0] });
+  });
+
+  // Guarded hard delete. Every child table cascades from `sections` (memberships, attendance,
+  // gradebook, activities, feed posts, practice history, roster entries, schedule patterns), so a
+  // Section is deletable only while none of that exists — see sectionDeletionBlockers. A refused
+  // delete names what is still there instead of quietly erasing it.
+  app.delete("/api/sections/:sectionId", async (request, reply) => {
+    const user = await requireCurrentUser(request, reply, pool, config);
+    if (!user) return;
+    const { sectionId } = request.params as { sectionId: string };
+    const roles = await getSectionRoles(pool, user.id, sectionId);
+    if (!user.isPlatformAdmin && !hasAnyRole(roles, ["owner"])) {
+      return reply.code(403).send({ error: "FORBIDDEN" });
+    }
+
+    return withTransaction(pool, async (client) => {
+      // Lock the row so a concurrent join cannot add a Membership between the check and the
+      // delete; the FK insert would otherwise block behind this transaction instead.
+      const existing = await client.query<{ course_id: string }>(
+        "SELECT course_id FROM sections WHERE id = $1 FOR UPDATE",
+        [sectionId],
+      );
+      if (!existing.rowCount) return reply.code(404).send({ error: "SECTION_NOT_FOUND" });
+
+      const blockers = await sectionDeletionBlockers(client, sectionId, user.id);
+      if (blockers.length > 0) {
+        return reply.code(409).send({ error: "SECTION_NOT_EMPTY", blockers });
+      }
+
+      await client.query("DELETE FROM sections WHERE id = $1", [sectionId]);
+      await client.query(
+        `INSERT INTO audit_log (actor_user_id, event_type, subject_type, subject_id, metadata)
+         VALUES ($1, 'section.deleted', 'section', $2, $3::jsonb)`,
+        [user.id, sectionId, JSON.stringify({ courseId: existing.rows[0]!.course_id })],
+      );
+      return reply.code(204).send();
+    });
   });
 
   // Redeems a join code: grants the caller `student` only, never `teacher`/`ta`/`owner`.
