@@ -35,6 +35,7 @@ export async function sectionDeletionBlockers(
      UNION ALL SELECT 'practiceAttempts', count(*)::int FROM practice_attempts WHERE section_id = $1
      UNION ALL SELECT 'practiceAssignments', count(*)::int FROM practice_assignments WHERE section_id = $1
      UNION ALL SELECT 'bookmarks', count(*)::int FROM practice_bookmarks WHERE section_id = $1 AND user_id <> $2
+     UNION ALL SELECT 'codeExercises', count(*)::int FROM code_exercises WHERE section_id = $1
      UNION ALL SELECT 'roster', count(*)::int FROM section_roster_entries WHERE section_id = $1
      ORDER BY resource`,
     [sectionId, callerUserId],

@@ -11,6 +11,7 @@ const BLOCKER_KEYS = {
   practiceAttempts: 'deleteBlocker_practiceAttempts',
   practiceAssignments: 'deleteBlocker_practiceAssignments',
   bookmarks: 'deleteBlocker_bookmarks',
+  codeExercises: 'deleteBlocker_codeExercises',
   roster: 'deleteBlocker_roster',
 }
 

@@ -249,6 +249,11 @@ function StudentView({ data, myRoles }) {
         <span><strong>{t('navActivities')}</strong><br /><span className="v2-subtext">{t('activitiesStudentSubtext')}</span></span>
         <span aria-hidden="true">→</span>
       </Link>
+      <Link to={`/v2/sections/${section.id}/code`} className="v2-card v2-activities-link" style={{ marginBottom: 14 }}>
+        <span aria-hidden="true">🐍</span>
+        <span><strong>{t('navCode')}</strong><br /><span className="v2-subtext">{t('codeStudentSubtext')}</span></span>
+        <span aria-hidden="true">→</span>
+      </Link>
       {course.type !== 'self_paced' && <CheckInCard sectionId={section.id} />}
       {course.type !== 'self_paced' && <ExitTicketStudentCard sectionId={section.id} />}
 

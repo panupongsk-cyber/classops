@@ -4,9 +4,11 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 
+import type { RunCode } from "./code-runner.js";
 import type { AppConfig } from "./config.js";
 import type { DatabasePool } from "./db.js";
 import { sessionRateLimitKey } from "./rate-limit-key.js";
+import { registerCodeExerciseRoutes } from "./routes/code-exercises.js";
 import { registerActivityRoutes } from "./routes/activities.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -28,7 +30,12 @@ import { registerStatsRoutes } from "./routes/stats.js";
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-export async function buildApp(dependencies: { config: AppConfig; pool: DatabasePool }) {
+export async function buildApp(dependencies: {
+  config: AppConfig;
+  pool: DatabasePool;
+  /** Optional overrides, e.g. a stub code runner in integration tests. */
+  deps?: { runCode?: RunCode };
+}) {
   const { config, pool } = dependencies;
   const trustedOriginSet = new Set(config.trustedOrigins);
   const app = Fastify({
@@ -97,6 +104,11 @@ export async function buildApp(dependencies: { config: AppConfig; pool: Database
   await registerFeedRoutes(app, { pool, config });
   await registerStatsRoutes(app, { pool, config });
   await registerActivityRoutes(app, { pool, config });
+  await registerCodeExerciseRoutes(app, {
+    pool,
+    config,
+    ...(dependencies.deps?.runCode ? { runCode: dependencies.deps.runCode } : {}),
+  });
   await registerAdminRoutes(app, { pool, config });
 
   app.setErrorHandler((error, request, reply) => {
