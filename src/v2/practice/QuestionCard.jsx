@@ -8,13 +8,15 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
   const { t } = useI18n()
   const figure = (lang === 'th' && question.figure?.th) || question.figure?.en
   return (
-    <div className="v2-card" style={{ marginBottom: 14 }}>
-      <div className="v2-subtext" style={{ marginBottom: 6 }}>
-        {question.examContentId} · Q{question.seq} · {question.category}{' '}
-        <span className="v2-badge v2-badge-ta" title={t('practiceCategoryDisclosureHint')}>{t('practiceCategoryDisclosure')}</span>
-        {flagged && <span className="v2-badge v2-badge-flag">⚑ {t('examFlaggedBadge')}</span>}
-        {unanswered && <span className="v2-badge v2-badge-student">{t('examUnansweredBadge')}</span>}
-        {question.locked && <span className="v2-badge v2-badge-flag" title={t('lockedKeyHint')}>🔒 {t('lockedKeyBadge')}</span>}
+    <div className="v2-card v2-question-card">
+      <div className="v2-question-header">
+        <div className="v2-question-meta">
+          <span>{question.examContentId} · Q{question.seq} · {question.category}</span>
+          <span className="v2-badge v2-badge-ta" title={t('practiceCategoryDisclosureHint')}>{t('practiceCategoryDisclosure')}</span>
+          {flagged && <span className="v2-badge v2-badge-flag">⚑ {t('examFlaggedBadge')}</span>}
+          {unanswered && <span className="v2-badge v2-badge-student">{t('examUnansweredBadge')}</span>}
+          {question.locked && <span className="v2-badge v2-badge-flag" title={t('lockedKeyHint')}>🔒 {t('lockedKeyBadge')}</span>}
+        </div>
         {bookmarks?.available && (
           <button
             type="button"
@@ -28,8 +30,8 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
           </button>
         )}
       </div>
-      <p style={{ whiteSpace: 'pre-wrap', margin: '0 0 12px' }}>{pick(question.stem, lang)}</p>
-      {figure && <img src={figure} alt={t('practiceFigureAlt', { n: question.seq })} style={{ maxWidth: '100%', marginBottom: 12, border: '1px solid var(--v2-border)', borderRadius: 8 }} />}
+      <p className="v2-question-stem">{pick(question.stem, lang)}</p>
+      {figure && <img src={figure} alt={t('practiceFigureAlt', { n: question.seq })} className="v2-question-figure" />}
       <div className="v2-choice-list" role="radiogroup">
         {question.options.map((o) => {
           const isSelected = (revealed?.selected ?? selected) === o.label
@@ -56,18 +58,18 @@ export default function QuestionCard({ question, lang, selected, onSelect, revea
             >
               <span className="v2-choice-mark" aria-hidden="true">{o.label})</span>
               {optFigure ? (
-                <img src={optFigure} alt={alt} style={{ maxWidth: 'min(100%, 360px)', borderRadius: 8, verticalAlign: 'middle' }} />
+                <img src={optFigure} alt={alt} className="v2-choice-img" />
               ) : (
-                <span style={{ whiteSpace: 'pre-wrap' }}>{pick(o.text, lang)}</span>
+                <span className="v2-choice-content">{pick(o.text, lang)}</span>
               )}
             </button>
           )
         })}
       </div>
       {revealed?.answer && question.explanation && (
-        <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(0,0,0,0.03)', border: '1px solid var(--v2-border)', borderRadius: 8 }}>
-          <div className="v2-subtext" style={{ marginBottom: 4 }}>{t('practiceExplanationNote')}</div>
-          <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{pick(question.explanation, lang)}</p>
+        <div className="v2-question-explanation">
+          <div className="v2-question-explanation-title">{t('practiceExplanationNote')}</div>
+          <p className="v2-question-explanation-text">{pick(question.explanation, lang)}</p>
         </div>
       )}
     </div>
