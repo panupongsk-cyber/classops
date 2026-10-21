@@ -63,13 +63,19 @@
 
 /* Card lists */
 .library-card {
-  margin: 12px 0;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  margin: 14px 0;
+  border-left: 4px solid var(--v2-primary);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04);
+  transition: all 0.2s ease;
 }
 
 .library-card:hover {
-  border-color: var(--v2-border-strong);
-  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.08);
+  border-color: var(--v2-primary-dark);
+  border-left: 5px solid var(--v2-primary-dark);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.09);
+  transform: translateY(-2px);
 }
 
 .library-card h2 {
