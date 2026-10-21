@@ -63,6 +63,8 @@ const baseSchema = z.object({
   MICROSOFT_CLIENT_SECRET: optionalNonEmpty(z.string().min(1)),
   MICROSOFT_REDIRECT_URI: optionalNonEmpty(z.url()),
   ADMIN_GOOGLE_EMAIL: z.email(),
+  // Piston code-execution API base URL (server-side only; never sent to the browser).
+  PISTON_URL: optionalNonEmpty(z.url()),
   LIBRARY_USER_IDS: z.string().default("").transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)).pipe(z.array(z.uuid())),
 });
 
@@ -92,7 +94,10 @@ function resolveOAuthConfig(
   return { clientId: clientId as string, clientSecret: clientSecret as string, redirectUri: redirectUri as string };
 }
 
-export type AppConfig = Omit<ReturnType<typeof loadAppConfig>, "libraryUserIds"> & { libraryUserIds?: readonly string[] };
+export type AppConfig = Omit<ReturnType<typeof loadAppConfig>, "libraryUserIds" | "pistonUrl"> & {
+  libraryUserIds?: readonly string[];
+  pistonUrl?: string | null;
+};
 
 export function loadAppConfig() {
   const env = baseSchema.parse(process.env);
@@ -102,6 +107,7 @@ export function loadAppConfig() {
 
   return {
     libraryUserIds: env.LIBRARY_USER_IDS,
+    pistonUrl: env.PISTON_URL ? env.PISTON_URL.replace(/\/+$/, "") : null,
     nodeEnv: env.NODE_ENV,
     host: env.HOST,
     port: env.PORT,

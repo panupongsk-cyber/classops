@@ -21,7 +21,26 @@ removed; `qrcode.react` was kept because `src/v2/attendance/SessionLivePage.jsx`
 ## Tests
 
 - **Server:** `npm --prefix server test`. Its integration tests need `TEST_DATABASE_URL`, pointing
-  at a throwaway PostgreSQL database.
+  at a throwaway PostgreSQL database. To run them against a disposable PostgreSQL 16 container:
+
+  ```bash
+  docker run -d --rm --name classops-test-pg -e POSTGRES_PASSWORD=test \
+    -e POSTGRES_DB=classops_test -p 55432:5432 postgres:16
+  cd server && npm ci
+  set -a; . ./.env.example; set +a
+  unset GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REDIRECT_URI \
+    MICROSOFT_CLIENT_ID MICROSOFT_CLIENT_SECRET MICROSOFT_REDIRECT_URI
+  export NODE_ENV=test ADMIN_GOOGLE_EMAIL=admin@example.test \
+    SEALED_PAYLOAD_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
+    DATABASE_URL=postgres://postgres:test@localhost:55432/classops_test
+  export TEST_DATABASE_URL="$DATABASE_URL"
+  npm run db:migrate && npm test
+  docker stop classops-test-pg
+  ```
+
+  `db:migrate` loads the full app config, so `.env.example` alone is not enough. It needs a
+  non-empty `SEALED_PAYLOAD_ENCRYPTION_KEY` and a valid `ADMIN_GOOGLE_EMAIL`. Each OAuth provider's
+  three `*_CLIENT_ID`/`*_CLIENT_SECRET`/`*_REDIRECT_URI` values must be all set or all unset.
 - **Frontend:** `npm test`, which runs Vitest with React Testing Library in jsdom
   (`vitest.config.js`, `src/**/*.test.{js,jsx}`).
   - i18n key parity, and every literal and template-built `t()` key is defined

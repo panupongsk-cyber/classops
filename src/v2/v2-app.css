@@ -506,3 +506,21 @@ a.v2-btn, a.v2-btn-sm { text-decoration: none; }
 .v2-histogram-count { font-size: .72rem; color: var(--v2-ink-muted); min-height: 1em; }
 .v2-histogram-bar { background: var(--v2-primary); border-radius: 4px 4px 0 0; min-height: 2px; }
 .v2-histogram-label { font-size: .68rem; color: var(--v2-ink-faint); margin-top: 4px; }
+
+/* Python code exercises (src/v2/code/) */
+.v2-code-h2 { font-size: 1.05rem; }
+.v2-content textarea.v2-code-editor, .v2-content textarea.v2-code-io {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; line-height: 1.5; tab-size: 4;
+}
+.v2-content textarea.v2-code-editor { min-height: 14em; white-space: pre; overflow-x: auto; }
+.v2-code-output {
+  margin: 6px 0 0; padding: 8px 10px; background: var(--v2-bg); border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem;
+  white-space: pre-wrap; word-break: break-word; max-height: 16em; overflow: auto;
+}
+.v2-code-stderr { color: var(--v2-error-fg); }
+.v2-code-prompt { white-space: pre-wrap; margin-bottom: 18px; }
+.v2-code-test { border: 1px solid var(--v2-border); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; }
+.v2-code-result { margin-top: 10px; padding-left: 10px; border-left: 3px solid var(--v2-border); }
+.v2-code-result.is-pass { border-left-color: var(--v2-success-fg); }
+.v2-code-result.is-fail { border-left-color: var(--v2-error-fg); }

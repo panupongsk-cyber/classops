@@ -110,3 +110,16 @@ test("TRUST_PROXY accepts false, true, or a list of IP addresses/CIDRs, and noth
     assert.throws(() => withEnv({ TRUST_PROXY: bad }, () => loadAppConfig()), Error, bad);
   }
 });
+
+test("PISTON_URL is optional: unset or empty means not configured", () => {
+  assert.equal(withEnv({}, () => loadAppConfig()).pistonUrl, null);
+  assert.equal(withEnv({ PISTON_URL: "" }, () => loadAppConfig()).pistonUrl, null);
+});
+
+test("PISTON_URL strips a trailing slash", () => {
+  assert.equal(withEnv({ PISTON_URL: "http://piston-host:2000/" }, () => loadAppConfig()).pistonUrl, "http://piston-host:2000");
+});
+
+test("an invalid PISTON_URL throws", () => {
+  assert.throws(() => withEnv({ PISTON_URL: "not a url" }, () => loadAppConfig()));
+});

@@ -70,6 +70,7 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
       LIBRARY_USER_IDS: ${LIBRARY_USER_IDS:-}
+      PISTON_URL: ${PISTON_URL:-}
       DATABASE_URL: postgresql://classops:${POSTGRES_PASSWORD}@postgres:5432/classops
       APP_BASE_URL: ${APP_BASE_URL}
       TRUSTED_ORIGINS: ${APP_BASE_URL}

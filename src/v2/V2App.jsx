@@ -24,6 +24,8 @@ import ActivitiesPage from './activities/ActivitiesPage.jsx'
 import AttemptPage from './activities/AttemptPage.jsx'
 import EvidencePage from './activities/EvidencePage.jsx'
 import PlayerPage from './activities/PlayerPage.jsx'
+import CodeExercisePage from './code/CodeExercisePage.jsx'
+import CodeExercisesPage from './code/CodeExercisesPage.jsx'
 import PracticeAssignmentsPage from './practice/PracticeAssignmentsPage.jsx'
 import LibraryPage from './library/LibraryPage.jsx'
 import PracticePage from './practice/PracticePage.jsx'
@@ -70,6 +72,8 @@ export default function V2App() {
       <Route path="/v2/sections/:sectionId/activities/:activityId/play" element={<ShellRoute><PlayerPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/activities/:activityId/evidence" element={<ShellRoute><EvidencePage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/activities/attempts/:attemptId" element={<ShellRoute><AttemptPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/code" element={<ShellRoute><CodeExercisesPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/code/:exerciseId" element={<ShellRoute><CodeExercisePage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/practice" element={<ShellRoute><PracticePage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/practice/attempts/:attemptId" element={<ShellRoute><PracticeRunPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/practice/progress" element={<ShellRoute><PracticeProgressPage /></ShellRoute>} />
