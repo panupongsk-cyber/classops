@@ -2,7 +2,7 @@
 
 ## Current deployment status
 
-As of 2026-09-25, this pack runs the live self-hosted ClassOps v2 at
+As of 2026-10-21, this pack runs the live self-hosted ClassOps v2 at
 [classops.pshomelab.dev](https://classops.pshomelab.dev/) on the Mac mini. The public origin is
 routed through a Cloudflare Tunnel to the loopback-bound gateway on the host.
 
@@ -25,10 +25,20 @@ active one):
 | `49d5d50` | 2026-09-26 | Practice-assignment auth order (PS-TASK-20260926-825): every `/api/practice-assignments/:assignmentId…` route authenticates before it looks the id up. A request without a session gets 401 whether or not the id exists, so assignment ids can no longer be probed. Signed-in responses are unchanged. No migration and no import. Evidence is on #834. |
 | `2787a95` | 2026-09-26 | The frontend test suite runs in CI (PS-TASK-20260926-838), and the practice home falls back to a generic message for unmapped error codes. The practice home labels an unofficial Thai translation as such (-842). `import-practice --update-text` updates a session's text in place, keeping question ids, answers, and figures (-848). With it, the text of `2025A_IP` and `2026S_IP` was updated to add their unofficial Thai translations (-842, -845), and attempts are kept. No migration. Evidence is on #854. |
 | `53a0dfd` | 2026-10-13 | Option-level practice figures, end to end (PS-TASK-20261012-1760): the exporter emits per-option crops, the package validator and importer accept them, `--update-text` admits figure additions only, and `QuestionCard` renders the option image with its description as alt text; the 2026S Q67 source-check correction (PS-TASK-20261012-1753) rides the same export. The six affected sessions were re-imported with `--replace` (figures 168 → 208): 2022A Q95 and 2025S Q30 are answerable again, and 2026S Q94 no longer gives its answer away. No migration. The same rollout restored the database from the nightly dump `classops-20261012T200001Z` after a volume-removal mistake; evidence is on #1760. |
+| `804ac17` | 2026-10-13 | Practice explanations end to end (PS-TASK-20261013-1777): an `explanation` field (English and Thai) runs from the item bank through the exporter and package validator into `practice_questions`, with migration `019_practice_explanations.sql`, and the UI shows it only after a reveal, under the label "คำอธิบายเสริม ไม่ใช่ของ ITPEC". The nine practice sessions now carry explanations for all 900 questions. Evidence is on #1777; production acceptance of the label is on #1957 (row 4). |
+| `76b4858` | 2026-10-20 | The private question library (PS-TASK-20261017-1954, -1955, -1956): a global catalogue independent of Section membership, search with facets and persistent reading context, reading that keeps source key notes private until reveal, and an audited publication/restoration path, with migrations `020_question_library.sql` and `021_library_releases.sql`. Published revision `7ec29a76…` holds 33 papers, 1,869 questions and 904 figures, restricted to an explicit user allowlist. Evidence is on #1954, #1955, #1956 and PR #2049; acceptance is on #1957. |
+| `3aef248` | 2026-10-20 | Guarded Course and Section deletion (PS-TASK-20261020-2264): a Section refuses to delete while it holds learning data or another member, answering `409 SECTION_NOT_EMPTY` with a per-resource blocker list, and a Course delete is checked Section by Section; both write `section.deleted` / `course.deleted` audit entries, and the browser gains a Section danger zone and a per-course delete on the admin Courses page. No migration. Evidence is on #2264 and acceptance on #2275. |
 
-`53a0dfd` is the active release, and `2787a95` is its rollback target. A code-only rollback
-leaves migrations 012–018 and the imported content in place, and the older code ignores the
-tables it doesn't know.
+`3aef248` is the active release, and `76b4858` is its rollback target. A code-only rollback
+leaves the migrations and the imported content in place, and the older code ignores the tables it
+doesn't know.
+- If you roll back past `3aef248`, the delete routes and their UI disappear. Nothing that was
+  already deleted comes back: the delete commits before it reports success.
+- If you roll back past `76b4858`, the library routes and UI disappear; migrations 020 and 021 and
+  the published revision stay in the database, so a later redeploy restores the library without a
+  re-import.
+- If you roll back past `804ac17`, the `explanation` column and its content stay; older code never
+  selects them, so attempts still work and learners see no explanation.
 - If you roll back past `53a0dfd`, the imported practice content keeps its option-level figures,
   which older code ignores: it shows each option's description text (now a neutral visual
   transcription) instead of the image. Question ids, answers, and attempts are unaffected.
@@ -73,6 +83,13 @@ tables it doesn't know.
   - a timed mock exam with a pass estimate
   - bookmarks, a mistakes quiz, and "My progress"
   - teacher-set practice assignments, with results, CSV, and gradebook sync
+  - an explanation after a reveal, labelled as supplementary and not ITPEC's own
+- the private question library, open to an explicit allowlist rather than to a Section:
+  - all 33 papers and 1,869 questions, in Thai and English with a stated fallback
+  - search with family, paper, year, category, language, and key-status facets
+  - reading with source figures, a key revealed on request, and the publication revision on screen
+- deleting an empty Section from its danger zone, and an empty Course from the admin Courses page,
+  both refused with the blocker list while learning data or another member remains
 - the Admin Console
 
 **Limits that still apply.** The three deferred items below were issues in the archived `ps-work`
@@ -89,13 +106,16 @@ repository means something else.
   - Clients behind one NAT, such as a campus classroom, still share the anonymous buckets. The
     OAuth-start limit is 200 per 15 minutes for that reason.
 - **Deferred operational evidence**, in `ps-work#732`:
-  - a backup/restore rehearsal against production
+  - ~~a backup/restore rehearsal against production~~ — done 2026-10-21 on release `3aef248`
+    (Issue #2277): a fresh dump restored into a disposable database with every table count, the
+    active library revision, and the migration checksum matching live.
   - reboot recovery. The host rebooted unattended on 2026-09-25 for a kernel update, and the
     stack came back healthy on its own; this is an observation, not a rehearsal.
   - public-IP alerting
   - wider security checks
-  - documentation review
-  - the full feature walkthrough on the live origin, which is still to be done
+  - ~~documentation review~~ — done 2026-10-21 (Issue #2279), this file included
+  - the full feature walkthrough on the live origin — done for the browser UI and the private
+    library through the T5 acceptance on Issue #1957
 
 The legacy Firebase client remains a historical source code path. It is not the service currently
 served at the public v2 hostname.

@@ -294,13 +294,31 @@
   display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%; padding: 12px 14px;
   border-radius: 10px; border: 1.5px solid var(--v2-border-strong); background: #fff; color: var(--v2-ink);
   cursor: pointer; font-family: inherit; font-size: .9rem; line-height: 1.5;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .v2-choice:disabled { cursor: default; }
-.v2-choice:not(:disabled):hover { border-color: var(--v2-primary); }
+.v2-choice:not(:disabled):hover { border-color: var(--v2-primary); box-shadow: 0 1px 4px rgba(79, 70, 229, 0.08); }
 .v2-choice.is-selected { border-color: var(--v2-primary); background: var(--v2-primary-tint); }
 .v2-choice.is-correct, .v2-pill-option.is-correct { border-color: var(--v2-success-fg); background: var(--v2-success-bg); }
 .v2-choice.is-wrong, .v2-pill-option.is-wrong { border-color: var(--v2-error-fg); background: var(--v2-error-bg); }
-.v2-choice-mark { flex: none; }
+.v2-choice-mark { flex: none; font-weight: 600; color: var(--v2-primary); }
+.v2-choice.is-correct .v2-choice-mark { color: var(--v2-success-fg); }
+.v2-choice.is-wrong .v2-choice-mark { color: var(--v2-error-fg); }
+.v2-choice-content { flex: 1; min-width: 0; white-space: pre-wrap; }
+.v2-choice-img { max-width: min(100%, 360px); border-radius: 8px; vertical-align: middle; border: 1px solid var(--v2-border); }
+
+/* Practice QuestionCard typography & structure */
+.v2-question-card { margin-bottom: 16px; }
+.v2-question-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.v2-question-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .85rem; color: var(--v2-ink-muted); }
+.v2-question-stem { font-size: 1rem; line-height: 1.7; white-space: pre-wrap; margin: 0 0 14px; color: var(--v2-ink); }
+.v2-question-figure { display: block; max-width: 100%; height: auto; margin: 0 auto 14px; border: 1px solid var(--v2-border); border-radius: 10px; background: #fff; }
+.v2-question-explanation {
+  margin-top: 14px; padding: 12px 16px; background: var(--v2-bg);
+  border: 1px solid var(--v2-border); border-left: 4px solid var(--v2-primary); border-radius: 8px;
+}
+.v2-question-explanation-title { font-size: .82rem; font-weight: 600; color: var(--v2-ink-muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
+.v2-question-explanation-text { white-space: pre-wrap; margin: 0; line-height: 1.6; font-size: .92rem; color: var(--v2-ink); }
 /* diagram_pick: a data-flow diagram drawn from the item; the button list below it is the control. */
 .v2-dfd {
   margin: 0 0 10px; padding: 8px; background: var(--v2-bg); border: 1px solid var(--v2-border); border-radius: 10px;

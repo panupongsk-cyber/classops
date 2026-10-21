@@ -56,7 +56,7 @@ function LibraryReader() {
   if (status === 'error') return <RetryableError onRetry={() => setAttempt((n) => n + 1)} />
 
   if (!examId) return <section className="library-page"><h1>{t('libraryTitle')}</h1><p>{t('libraryPrivate')}</p><LibraryPublication publication={data.publication}/><Link className="v2-btn v2-btn-secondary" to="/v2/library?scope=search&page=1&lang=th">{t('librarySearchTitle')}</Link>
-    {data.exams.length === 0 ? <EmptyState heading={t('libraryEmpty')} /> : data.exams.map((exam) => <article className="v2-card" key={exam.id}>
+    {data.exams.length === 0 ? <EmptyState heading={t('libraryEmpty')} /> : data.exams.map((exam) => <article className="v2-card library-card" key={exam.id}>
       <h2><Link to={path(exam.id)}>{exam.metadata.title}</Link></h2>
       <p>{exam.metadata.provider} · {exam.metadata.item_count} {t('libraryItems')}</p>
     </article>)}
@@ -68,30 +68,32 @@ function LibraryReader() {
   const previous = inSearch ? data.resultContext?.previous : data.previous && {exam:examId,item:data.previous}
   const next = inSearch ? data.resultContext?.next : data.next && {exam:examId,item:data.next}
   return <section className="library-page">
-    <Link to="/v2/library">← {t('libraryTitle')}</Link>
+    <Link to="/v2/library" className="library-back-link">← {t('libraryTitle')}</Link>
     <h1>{meta.title}</h1><LibraryPublication publication={data.publication}/>
-    <label>{t('libraryLanguage')} <select value={requestedLang} onChange={(e) => { const next = new URLSearchParams(search); next.set('lang', e.target.value); setSearch(next, { replace: true }) }}>
-      <option value="th">ไทย</option><option value="en">English</option>
-    </select></label>
-    <p>{t('libraryDisplaying')}: <strong>{lang === 'th' ? 'ไทย' : 'English'}</strong>{lang !== requestedLang && ` · ${t('libraryFallback')}`}</p>
+    <div className="library-header-meta">
+      <label>{t('libraryLanguage')} <select value={requestedLang} onChange={(e) => { const next = new URLSearchParams(search); next.set('lang', e.target.value); setSearch(next, { replace: true }) }}>
+        <option value="th">ไทย</option><option value="en">English</option>
+      </select></label>
+      <p style={{ margin: 0 }}>{t('libraryDisplaying')}: <strong>{lang === 'th' ? 'ไทย' : 'English'}</strong>{lang !== requestedLang && ` · ${t('libraryFallback')}`}</p>
+    </div>
     {lang === 'th' && meta.translation_note && <p className="v2-subtext">{meta.translation_note}</p>}
     {!itemId ? <>
       <p>{data.total} {t('libraryItems')} · {t('libraryPage')} {page}</p>
-      {data.questions.length === 0 ? <EmptyState heading={t('libraryNoItems')} /> : data.questions.map((q) => <article className="v2-card" key={q.source_id}>
-        <Link to={`${path(examId, q.source_id)}${query}`}>{q.source_label || `Q${q.source_number || q.seq}`} · {text(q.stem, lang) || t('libraryImageItem')}</Link>
+      {data.questions.length === 0 ? <EmptyState heading={t('libraryNoItems')} /> : data.questions.map((q) => <article className="v2-card library-card" key={q.source_id}>
+        <Link className="library-item-title" to={`${path(examId, q.source_id)}${query}`}>{q.source_label || `Q${q.source_number || q.seq}`} · {text(q.stem, lang) || t('libraryImageItem')}</Link>
       </article>)}
       <nav className="library-actions" aria-label={t('libraryPages')}>
         {page > 1 && <Link to={`${path(examId)}?page=${page - 1}&lang=${requestedLang}`}>{t('libraryPrevious')}</Link>}
         {page * data.pageSize < data.total && <Link to={`${path(examId)}?page=${page + 1}&lang=${requestedLang}`}>{t('libraryNext')}</Link>}
       </nav>
     </> : <>
-      <Link to={`${inSearch ? '/v2/library' : path(examId)}${query}`}>← {t('libraryBack')}</Link>
+      <Link to={`${inSearch ? '/v2/library' : path(examId)}${query}`} className="library-back-link">← {t('libraryBack')}</Link>
       <article className="v2-card library-question" lang={lang}>
         <h2>{data.question.source_label || `Q${data.question.source_number || data.question.seq}`}</h2>
         <p className="v2-subtext">{data.question.content_id} · {data.question.category || t('libraryUncategorized')} · {t(meta.category_provenance === 'official' ? 'libraryOfficialCategory' : meta.category_provenance === 'unavailable' ? 'libraryUncategorized' : 'libraryCategoryNote')}</p>
         {data.question.question_type === 'numeric_response' && <p>{t('libraryFreeResponse')}</p>}
         {data.question.voided && <p className="library-notice">{t('libraryVoided')} · {data.question.voided_note}</p>}
-        <p className="library-text">{text(data.question.stem, lang) || t('libraryImageItem')}</p>
+        <p className="library-text library-stem">{text(data.question.stem, lang) || t('libraryImageItem')}</p>
         {data.question.answer_in_image && <p className="library-notice">{t('libraryAnswerInImage')}</p>}
         {data.question.representation === 'full_item_image' && <p>{t('libraryFullImage')}</p>}
         {data.question.table && <div className="library-table" role="region" aria-label={t('libraryTable')} tabIndex={0}><table><tbody>{data.question.table.rows.map((row, ri) => <tr key={ri}>{row.map((cell, ci) => ri < data.question.table.header_rows ? <th key={ci} scope="col">{cell}</th> : <td key={ci}>{cell}</td>)}</tr>)}</tbody></table></div>}
@@ -106,8 +108,8 @@ function LibraryReader() {
         </button>
         {answerStatus === 'stale' && <div role="alert"><p>{t('libraryRevisionChanged')}</p><button type="button" onClick={()=>setAttempt(n=>n+1)}>{t('libraryReload')}</button></div>}
         {answerStatus === 'error' && <RetryableError onRetry={reveal} />}
-        {answer && <div role="status"><p><strong>{t('libraryAnswer')}: {answer.voided ? t('libraryVoided') : answer.answer || t('libraryNoAnswer')}</strong></p>
-          <p>{t('libraryProvenance')}: {meta.answer_key_provenance}</p>
+        {answer && <div className="library-answer-panel" role="status"><p className="library-answer-key"><strong>{t('libraryAnswer')}: {answer.voided ? t('libraryVoided') : answer.answer || t('libraryNoAnswer')}</strong></p>
+          <p className="library-answer-meta">{t('libraryProvenance')}: {meta.answer_key_provenance}</p>
           {answer.answer_alternatives?.length > 0 && <p>{t('libraryAlternatives')}: {answer.answer_alternatives.join(', ')}</p>}
           {answer.answer_key_note && <p className="library-text">{answer.answer_key_note}</p>}
           {answer.explanation && <p className="library-text">{text(answer.explanation, lang)}</p>}
