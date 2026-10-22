@@ -3,9 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import { useI18n } from '../i18n/I18nContext.jsx'
 import { ForbiddenState, LoadingRows, RetryableError } from '../components/StateViews.jsx'
 import { ApiError } from '../auth/api.js'
+import GradebookImportCard from './GradebookImportCard.jsx'
 import {
   createAssignment, createCategory, deleteAssignment, deleteCategory,
-  downloadGradebookCsv, getGradebook, listAssignments, listCategories,
+  downloadGradebookCsv, getGradebook, listAssignments, listCategories, setAssignmentReleased,
 } from './api.js'
 
 export default function GradebookPage() {
@@ -20,8 +21,9 @@ export default function GradebookPage() {
   const [categoryName, setCategoryName] = useState('')
   const [categoryWeight, setCategoryWeight] = useState('')
 
-  const load = useCallback(async () => {
-    setStatus('loading')
+  // `silent` keeps the page mounted while it refreshes, so a card's own result message survives.
+  const load = useCallback(async (options) => {
+    if (!options?.silent) setStatus('loading')
     try {
       const [categoriesResult, assignmentsResult, gradebookResult] = await Promise.all([
         listCategories(sectionId), listAssignments(sectionId), getGradebook(sectionId),
@@ -92,6 +94,8 @@ export default function GradebookPage() {
         </form>
       </div>
 
+      <GradebookImportCard sectionId={sectionId} onImported={() => load({ silent: true })} />
+
       <div style={{ fontWeight: 600, marginBottom: 12 }}>{t('resultsHeading')}</div>
       <table className="v2-table">
         <thead>
@@ -137,6 +141,11 @@ function CategoryBlock({ category, assignments, onDeleteCategory, onChanged }) {
     onChanged()
   }
 
+  async function handleToggleRelease(assignment) {
+    await setAssignmentReleased(assignment.id, assignment.released_at === null)
+    onChanged()
+  }
+
   async function handleDeleteAssignment(assignmentId) {
     if (!window.confirm(t('deleteConfirm'))) return
     await deleteAssignment(assignmentId)
@@ -152,8 +161,16 @@ function CategoryBlock({ category, assignments, onDeleteCategory, onChanged }) {
       {assignments.length === 0 && <p style={{ color: 'var(--v2-ink-muted)', fontSize: '.82rem' }}>{t('noAssignments')}</p>}
       {assignments.map((assignment) => (
         <div key={assignment.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '.85rem' }}>
-          <span>{assignment.name} <span className="is-muted">/ {assignment.max_points}</span></span>
           <span>
+            {assignment.name} <span className="is-muted">/ {assignment.max_points}</span>
+            <span className="is-muted" style={{ marginLeft: 8, fontSize: '.75rem' }}>
+              {assignment.released_at ? t('releasedToStudents') : t('hiddenFromStudents')}
+            </span>
+          </span>
+          <span>
+            <button type="button" className="v2-btn v2-btn-secondary" style={{ padding: '2px 8px', fontSize: '.72rem', marginRight: 8 }} onClick={() => handleToggleRelease(assignment)}>
+              {assignment.released_at ? t('hideFromStudents') : t('releaseToStudents')}
+            </button>
             <Link to={`/v2/sections/${sectionId}/gradebook/assignments/${assignment.id}/scores`} className="v2-link-action" style={{ marginRight: 12, fontSize: '.8rem' }}>{t('enterScoresAction')}</Link>
             <button type="button" className="v2-btn v2-btn-secondary" style={{ padding: '2px 8px', fontSize: '.72rem' }} onClick={() => handleDeleteAssignment(assignment.id)}>{t('remove')}</button>
           </span>

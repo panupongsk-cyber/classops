@@ -128,6 +128,17 @@ Session/check-in/Exit-Ticket tables (see `phase2b2-product-spec.md`):
   Category's percentage, the final grade) both call the same computation function, so their
   numbers can never drift apart.
 - Teacher-facing only (`owner`/`teacher`/`ta`) — no student-facing grade view in this phase.
+  Added later by #2436: `GET /api/sections/:sectionId/my-grades` returns the caller's own scores
+  for released Assignments only (`PATCH /api/assignments/:id` with `{ released }`, migration 023),
+  and computes category percentages and the final grade from that released work alone.
+- Added later by #2437: the CSV export carries a `Student ID` column, and
+  `POST /api/sections/:sectionId/gradebook/import/preview` and `.../gradebook/import` read a file in
+  the export's shape (base64, UTF-8 or TIS-620, up to 512 KB). The planning is the pure
+  `src/gradebook-import.ts`; confirm re-plans inside its transaction, writes `points_earned` only,
+  and records a `gradebook.imported` audit entry. An unedited export imports as zero changes.
+- Added by #2447: `memberships.roster_student_id` (migration 024) keeps the ID that roster enrolment
+  gave. A gradebook-import row matched only by a student ID the learner typed (no email in the row)
+  is still imported, but flagged `selfEnteredId` so the preview asks the teacher to check the name.
 
 No new environment variable, container, or background worker (see
 `phase2b2-deployment-spec.md`).

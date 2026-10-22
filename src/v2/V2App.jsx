@@ -9,6 +9,7 @@ import SessionLivePage from './attendance/SessionLivePage.jsx'
 import FeedPage from './feed/FeedPage.jsx'
 import AssignmentScoresPage from './gradebook/AssignmentScoresPage.jsx'
 import GradebookPage from './gradebook/GradebookPage.jsx'
+import MyGradesPage from './gradebook/MyGradesPage.jsx'
 import AddSectionPage from './sections/AddSectionPage.jsx'
 import CreateCoursePage from './sections/CreateCoursePage.jsx'
 import SectionDetailPage from './sections/SectionDetailPage.jsx'
@@ -65,6 +66,7 @@ export default function V2App() {
       <Route path="/v2/sections/:sectionId/attendance" element={<ShellRoute><AttendancePage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/attendance/live/:sessionId" element={<ProtectedRoute><SessionLivePage /></ProtectedRoute>} />
       <Route path="/v2/sections/:sectionId/gradebook" element={<ShellRoute><GradebookPage /></ShellRoute>} />
+      <Route path="/v2/sections/:sectionId/grades" element={<ShellRoute><MyGradesPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/gradebook/assignments/:assignmentId/scores" element={<ShellRoute><AssignmentScoresPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/feed" element={<ShellRoute><FeedPage /></ShellRoute>} />
       <Route path="/v2/sections/:sectionId/stats" element={<ShellRoute><StatsPage /></ShellRoute>} />

@@ -53,7 +53,16 @@ export function decodeRosterBytes(bytes: Uint8Array, encoding: RosterEncoding | 
 
 /** RFC 4180 CSV: quoted fields, "" escapes, CRLF or LF, a trailing newline. Blank lines dropped. */
 export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
+  return parseCsvRecords(text).map((record) => record.cells);
+}
+
+/**
+ * parseCsv, keeping each record's 1-based number among all records -- blank ones included, a
+ * newline inside a quoted cell not counted -- so a reported line is the spreadsheet row number.
+ */
+export function parseCsvRecords(text: string): { line: number; cells: string[] }[] {
+  const rows: { line: number; cells: string[] }[] = [];
+  let record = 0;
   let row: string[] = [];
   let field = "";
   let quoted = false;
@@ -73,13 +82,15 @@ export function parseCsv(text: string): string[][] {
     } else if (c === "\n" || c === "\r") {
       if (c === "\r" && text[i + 1] === "\n") i += 1;
       row.push(field);
-      if (row.some((f) => f.trim() !== "")) rows.push(row);
+      record += 1;
+      if (row.some((f) => f.trim() !== "")) rows.push({ line: record, cells: row });
       row = [];
       field = "";
     } else field += c;
   }
   row.push(field);
-  if (row.some((f) => f.trim() !== "")) rows.push(row);
+  record += 1;
+  if (row.some((f) => f.trim() !== "")) rows.push({ line: record, cells: row });
   return rows;
 }
 

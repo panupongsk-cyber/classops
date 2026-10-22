@@ -111,12 +111,13 @@ async function enrollFromRoster(
   entry: { section_id: string; student_id: string; name_th: string | null; name_en: string | null; email: string },
 ) {
   await db.query(
-    `INSERT INTO memberships (user_id, section_id, roles, student_id, roster_name_th, roster_name_en, roster_email)
-     VALUES ($1, $2, ARRAY['student'], $3, $4, $5, $6)
+    `INSERT INTO memberships (user_id, section_id, roles, student_id, roster_student_id, roster_name_th, roster_name_en, roster_email)
+     VALUES ($1, $2, ARRAY['student'], $3, $3, $4, $5, $6)
      ON CONFLICT (user_id, section_id) DO UPDATE
      SET roles = CASE WHEN 'student' = ANY(memberships.roles) THEN memberships.roles
                       ELSE array_append(memberships.roles, 'student') END,
-         student_id = EXCLUDED.student_id, roster_name_th = EXCLUDED.roster_name_th,
+         student_id = EXCLUDED.student_id, roster_student_id = EXCLUDED.roster_student_id,
+         roster_name_th = EXCLUDED.roster_name_th,
          roster_name_en = EXCLUDED.roster_name_en, roster_email = EXCLUDED.roster_email, updated_at = now()`,
     [userId, entry.section_id, entry.student_id, entry.name_th, entry.name_en, entry.email],
   );
