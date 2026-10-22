@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../auth/api.js'
 import { EmptyState, ForbiddenState, LoadingRows, RetryableError } from '../components/StateViews.jsx'
 import { useI18n } from '../i18n/I18nContext.jsx'
-import { browseQuestions, getPracticeStats, listAttempts, listExams, setPracticeEnabled, startAttempt } from './api.js'
+import { browseQuestions, getPracticeStats, listAttempts, listExams, startAttempt } from './api.js'
+import PracticeSwitch from './PracticeSwitch.jsx'
 import QuestionCard from './QuestionCard.jsx'
 import useBookmarks from './useBookmarks.js'
 
@@ -97,20 +98,10 @@ export default function PracticePage() {
     setBrowse(await browseQuestions(sectionId, exam.id, { category: category || undefined, offset, limit: 10 }))
   }
 
-  async function toggle() {
-    await setPracticeEnabled(sectionId, !data.enabled)
-    await load()
-  }
-
   return (
     <div className="v2-content-narrow">
       <h1 className="v2-h1">{t('practiceHeading')}</h1>
-      {data.canManage && (
-        <div className={`v2-notice ${data.enabled ? 'v2-notice-info' : 'v2-notice-error'}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span>{data.enabled ? t('practiceEnabledForStudents') : t('practiceDisabledForStudents')}</span>
-          <button type="button" className="v2-btn-sm v2-btn-outline" onClick={toggle}>{data.enabled ? t('practiceDisable') : t('practiceEnable')}</button>
-        </div>
-      )}
+      {data.canManage && <PracticeSwitch sectionId={sectionId} enabled={data.enabled} canToggle={data.canToggle} onChanged={load} />}
       {data.exams.length === 0 ? (
         <EmptyState icon="📭" heading={t('practiceNoExams')} body="" />
       ) : (

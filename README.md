@@ -64,8 +64,8 @@ removed; `qrcode.react` was kept because `src/v2/attendance/SessionLivePage.jsx`
   folder, its current state is exported back out to `panupongsk-cyber/classops`'s `main` so the
   external repo keeps serving as the sole deploy target. That export is a manual step run locally
   (never a PersonalSchema CI secret — this repo never adds privileged CI credentials).
-- **Mirror status (2026-10-22):** `panupongsk-cyber/classops` `main` is at `3f6517c`, deployed on
-  production as `releases/3f6517c` with `cfa1981` as the rollback target. The exports since the
+- **Mirror status (2026-10-22):** `panupongsk-cyber/classops` `main` is at `720fb95`, deployed on
+  production as `releases/720fb95` with `3f6517c` as the rollback target. The exports since the
   2026-09-25 record:
   - `804ac17` — practice explanations end to end, migration `019_practice_explanations.sql`
     (PersonalSchema PS-TASK-20261013-1777, PR #1781)
@@ -78,6 +78,10 @@ removed; `qrcode.react` was kept because `src/v2/attendance/SessionLivePage.jsx`
     (PS-TASK-20261021-2318/-2322, panupongsk-cyber/classops#33, #34)
   - `3f6517c` — Python code exercises through Piston, migration `022_code_exercises.sql`
     (PS-TASK-20261022-2374, PR #2375, panupongsk-cyber/classops#35)
+  - `720fb95` — "My grades" with a per-Assignment release switch, gradebook CSV import, and the
+    self-entered student ID warning, migrations `023_assignment_release.sql` and
+    `024_membership_roster_student_id.sql` (PS-TASK-20261022-2436/-2437/-2447, PRs #2441, #2443,
+    #2448, panupongsk-cyber/classops#36)
   - Release history, rollback consequences, and the browser-UI inventory live in
     `ops/deploy/README.md` inside this folder.
 - **Previous mirror status (2026-09-25):** the learning-activities module is exported to

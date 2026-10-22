@@ -83,3 +83,30 @@ test("rate-limit errors retain HTTP 429 instead of becoming HTTP 500", async () 
     await app.close();
   }
 });
+
+// Every route answers errors in the app's own shape, including routes registered before a route
+// module awaits app.register (#2438): Fastify's default handler would echo database error text.
+test("errors on every route use the app's shape, never raw database or parser text", async () => {
+  const failingPool = fakePool(async () => {
+    throw Object.assign(new Error('relation "secret_internal_table" does not exist'), { code: "42P01" });
+  });
+  const app = await buildApp({ config: testConfig("test"), pool: failingPool });
+  try {
+    const origin = { origin: "https://classops.example.test" };
+    const badJson = await app.inject({
+      method: "POST",
+      url: "/api/courses",
+      headers: { ...origin, "content-type": "application/json" },
+      payload: "{not json",
+    });
+    assert.deepEqual([badJson.statusCode, badJson.json()], [400, { error: "INVALID_REQUEST" }]);
+    for (const url of ["/api/courses", "/api/auth/me", "/api/sections/00000000-0000-4000-8000-000000000000/feed", "/api/library"]) {
+      const response = await app.inject({ method: "GET", url, headers: { cookie: "classops_session=bogus" } });
+      assert.equal(response.statusCode, 500, url);
+      assert.deepEqual(response.json(), { error: "INTERNAL_SERVER_ERROR" }, url);
+      assert.ok(!response.body.includes("secret_internal_table"), url);
+    }
+  } finally {
+    await app.close();
+  }
+});
