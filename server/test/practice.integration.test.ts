@@ -53,9 +53,16 @@ test("Exam practice: per-Section opt-in, browse, practice, quick quiz, no key be
     // Off by default: students are refused; staff may preview; only owner/teacher/admin toggles.
     assert.deepEqual((await get(alice, `${base}/exams`)).json(), { error: "PRACTICE_NOT_ENABLED" });
     const preview = (await get(teacher, `${base}/exams`)).json();
-    assert.deepEqual([preview.enabled, preview.canManage, preview.exams.length], [false, true, 2]);
+    assert.deepEqual([preview.enabled, preview.canManage, preview.canToggle, preview.exams.length], [false, true, true, 2]);
     assert.deepEqual(preview.exams.map((e: { content_id: string }) => e.content_id), ["2099A_XX", "2099S_XX"], "October (A) before April (S) of the same year");
     assert.equal((await app.inject({ method: "PATCH", url: base, headers: { cookie: alice.cookie, ...origin }, payload: { enabled: true } })).statusCode, 403);
+    // A TA previews (canManage) but cannot switch, and the catalogue says so (#1995).
+    const ta = await createUserWithSession(pool, "ta@example.com");
+    assert.equal((await post(teacher, `/api/sections/${sectionId}/memberships`, { email: "ta@example.com", roles: ["ta"] })).statusCode, 201);
+    const taView = (await get(ta, `${base}/exams`)).json();
+    assert.deepEqual([taView.canManage, taView.canToggle], [true, false]);
+    assert.equal((await app.inject({ method: "PATCH", url: base, headers: { cookie: ta.cookie, ...origin }, payload: { enabled: true } })).statusCode, 403);
+    assert.equal((await get(admin, `${base}/exams`)).json().canToggle, true);
     assert.equal((await app.inject({ method: "PATCH", url: base, headers: { cookie: teacher.cookie, ...origin }, payload: { enabled: true } })).statusCode, 200);
     assert.equal((await get(teacher, `/api/sections/${sectionId}`)).json().section.practice_enabled, true);
     const catalogue = (await get(alice, `${base}/exams`)).json();

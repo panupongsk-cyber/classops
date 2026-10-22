@@ -2,7 +2,7 @@
 
 ## Current deployment status
 
-As of 2026-10-21, this pack runs the live self-hosted ClassOps v2 at
+As of 2026-10-22, this pack runs the live self-hosted ClassOps v2 at
 [classops.pshomelab.dev](https://classops.pshomelab.dev/) on the Mac mini. The public origin is
 routed through a Cloudflare Tunnel to the loopback-bound gateway on the host.
 
@@ -30,10 +30,15 @@ active one):
 | `3aef248` | 2026-10-20 | Guarded Course and Section deletion (PS-TASK-20261020-2264): a Section refuses to delete while it holds learning data or another member, answering `409 SECTION_NOT_EMPTY` with a per-resource blocker list, and a Course delete is checked Section by Section; both write `section.deleted` / `course.deleted` audit entries, and the browser gains a Section danger zone and a per-course delete on the admin Courses page. No migration. Evidence is on #2264 and acceptance on #2275. |
 | `cfa1981` | 2026-10-21 | Frontend only (PS-TASK-20261021-2318, -2322; panupongsk-cyber/classops#33, #34): the Question Library and practice QuestionCard redesign, and the high-contrast theme and visual identity overhaul. No migration. Row added afterwards by PS-TASK-20261022-2412 from the public PR titles and the release directory date. |
 | `3f6517c` | 2026-10-22 | Python code exercises per Section (PS-TASK-20261022-2374, PR #2375, panupongsk-cyber/classops#35): teacher-authored exercises with visible tests, student Run and Submit checked server-side through Piston (`PS-SVC-piston`, set by `PISTON_URL` in the secrets env file), and the teacher's pass-count list, with migration `022_code_exercises.sql`. Evidence is on #2374. |
+| `720fb95` | 2026-10-22 | Student grades and gradebook import (PS-TASK-20261022-2436, -2437, -2447; PRs #2441, #2443, #2448; panupongsk-cyber/classops#36): "My grades" with a per-Assignment release switch, so students see released work only, totals included; gradebook CSV import with preview and confirm, matching by student ID then email; and a preview warning for rows matched only by a learner-typed ID. Migrations `023_assignment_release.sql` and `024_membership_roster_student_id.sql`. Backup `classops-20261022T123643Z` before the change. Evidence is on #2449. |
 
-`3f6517c` is the active release, and `cfa1981` is its rollback target. A code-only rollback
+`720fb95` is the active release, and `3f6517c` is its rollback target. A code-only rollback
 leaves the migrations and the imported content in place, and the older code ignores the tables it
 doesn't know.
+- If you roll back past `720fb95`, "My grades", the release switch, and the gradebook CSV import
+  disappear, and the export loses its `Student ID` column. Migrations 023 and 024 stay: older code
+  ignores `assignments.released_at` and `memberships.roster_student_id`, and students again see no
+  grade page, so nothing hidden becomes visible.
 - If you roll back past `3f6517c`, the code-exercise routes and UI disappear; migration 022's
   tables and any exercises and submissions stay in the database, and a later redeploy restores
   them. Leaving `PISTON_URL` set is harmless to older code.
@@ -72,7 +77,9 @@ doesn't know.
 
 - sections, and creating courses and sections
 - attendance check-in
-- the gradebook
+- the gradebook, with CSV import (preview, then confirm) and a Student ID column in the export
+- "My grades" for students: released Assignments only, with category and final totals from
+  released work; managers release or hide each Assignment
 - the class feed
 - stats
 - learning activities:

@@ -277,7 +277,10 @@ export async function registerPracticeRoutes(app: FastifyInstance, dependencies:
        -- Newest first: year, then the October (A) administration before April (S).
        ORDER BY substring(content_id FROM 1 FOR 4) DESC, (substring(content_id FROM 5 FOR 1) = 'A') DESC, content_id`,
     );
-    return reply.send({ enabled: ctx.enabled, canManage: ctx.staff, exams: exams.rows });
+    // canManage (owner/teacher/ta/admin) previews while practice is off; only owner/teacher/admin
+    // may switch it (PATCH above), so a TA gets the state without a dead switch (#1995).
+    const canToggle = ctx.user.isPlatformAdmin || hasAnyRole(ctx.roles, ["owner", "teacher"]);
+    return reply.send({ enabled: ctx.enabled, canManage: ctx.staff, canToggle, exams: exams.rows });
   });
 
   // --- Browse: a session's questions with answers, paged ---

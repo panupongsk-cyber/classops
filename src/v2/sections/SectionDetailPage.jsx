@@ -7,6 +7,7 @@ import { ApiError } from '../auth/api.js'
 import CheckInCard from '../attendance/CheckInCard.jsx'
 import ExitTicketStudentCard from '../attendance/ExitTicketStudentCard.jsx'
 import RosterImportCard from './RosterImportCard.jsx'
+import PracticeSwitch from '../practice/PracticeSwitch.jsx'
 import StudentIdCard from './StudentIdCard.jsx'
 import { deleteSection, getCourse, getSection, inviteMember, listMemberships, regenerateJoinCode, removeMember } from './api.js'
 import { sectionDeleteError } from './deletion.js'
@@ -148,6 +149,12 @@ function ManagerView({ data, myRoles, isPlatformAdmin, onChanged }) {
             ? <button type="button" className="v2-btn v2-btn-tint" onClick={handleRegenerate} disabled={regenerating}>{t('regenerate')}</button>
             : <span style={{ fontSize: '.72rem', color: 'var(--v2-ink-faint)', maxWidth: 150 }}>{t('regenerateHint')}</span>}
         </div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <PracticeSwitch sectionId={section.id} enabled={Boolean(section.practice_enabled)} canToggle={canRegenerate} onChanged={() => onChanged(true)}>
+          {' · '}<Link to={`/v2/sections/${section.id}/practice`} className="v2-link-action">{t('practiceOpenPage')}</Link>
+        </PracticeSwitch>
       </div>
 
       <form onSubmit={handleInvite} className="v2-card" style={{ marginBottom: 16 }}>

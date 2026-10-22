@@ -148,8 +148,19 @@ No new environment variable, container, or background worker (see
 Added on top of the Phase 1 Course/Section/Membership shared core, entirely independent of the
 attendance and gradebook tables (see `phase2b3-product-spec.md`):
 
-- **Post** (Section-scoped): text body + optional link URL — no file attachments, deliberately
-  deferred (the first feature that could plausibly have needed new storage infrastructure).
+- **Post** (Section-scoped): text body + optional link URL. File attachments were deferred here and
+  added by #2438: staff upload raw bytes to `POST /api/posts/:postId/attachments?name=` (its own
+  plugin scope: octet-stream only, 10 MB, authorized in `onRequest` before the body is read);
+  `src/attachments.ts` accepts PDF, PNG/JPEG/GIF/WebP, DOCX/XLSX/PPTX (OOXML structure checked)
+  and UTF-8 text only when the extension and bytes agree; at most 5 per Post (row lock). Files
+  live in `post_attachments` (migration 025, `bytea` stored EXTERNAL). Members download through
+  `GET /api/attachments/:id`, streamed in 1 MB slices with at most 3 slice reads at once, with
+  nosniff, `default-src 'none'; sandbox`, and inline disposition only for images; it has its own
+  600/min rate-limit bucket. Staff delete with `DELETE /api/attachments/:id`.
+- Feed updates (#2439) are polled, not pushed: `GET /api/sections/:sectionId/feed/version` (members
+  only) returns an md5 of the Section's post, comment, like and attachment counts and newest
+  timestamps, and `GET .../feed` carries the same `version`. The browser checks every ~20 s while
+  the page is visible and refetches only on a change.
   Created by `owner`/`teacher`/`ta` only; any `owner`/`teacher`/`ta` may edit or delete **any**
   Post, not only the one they authored — consistent with Category/Assignment management.
 - **Comment**: any Section member, including students, may comment (genuine Q&A, not a
