@@ -142,8 +142,11 @@ export async function registerStatsRoutes(
     const caller = await requireCurrentUser(request, reply, pool, config);
     if (!caller) return;
 
+    // A plain member viewing their own grade sees it from released Assignments only (#2436).
+    let releasedOnly = false;
     if (!caller.isPlatformAdmin) {
       const callerRoles = await getSectionRoles(pool, caller.id, sectionId);
+      releasedOnly = !canManageSessions(callerRoles);
       if (callerRoles.length === 0) return reply.code(403).send({ error: "FORBIDDEN" });
       if (caller.id !== userId && !canManageSessions(callerRoles)) {
         return reply.code(403).send({ error: "FORBIDDEN" });
@@ -156,7 +159,7 @@ export async function registerStatsRoutes(
     }
 
     const [{ gradeByUserId }, attendance] = await Promise.all([
-      loadGradebookInputs(pool, sectionId),
+      loadGradebookInputs(pool, sectionId, { releasedOnly }),
       getAttendanceData(pool, sectionId),
     ]);
     const grade = gradeByUserId.get(userId);

@@ -109,6 +109,14 @@ test("Roster import: TIS-620 registrar file, preview statuses, apply, pending cl
       )).rows[0];
     assert.deepEqual(await member(somchai.userId), { roles: ["student"], student_id: "69000001", roster_name_th: "นายสมชาย ทดสอบศรี", roster_name_en: "Mr. SOMCHAI THOTSOBSI", roster_email: "somchai.j@example.edu" });
     assert.equal((await member(somying.userId))!.student_id, "69000002", "the roster wins a student-ID conflict");
+    // Roster enrolment records the roster's ID separately (#2447), so a later self-edit shows.
+    const rosterId = async (userId: string) =>
+      (await pool.query<{ roster_student_id: string | null }>(
+        "SELECT roster_student_id FROM memberships WHERE user_id = $1 AND section_id = $2",
+        [userId, sectionId],
+      )).rows[0]?.roster_student_id;
+    assert.equal(await rosterId(somchai.userId), "69000001");
+    assert.equal(await rosterId(somying.userId), "69000002");
     const pending = (await get(teacher, `/api/sections/${sectionId}/roster-pending`)).json().pending;
     assert.deepEqual(pending.map((p: { student_id: string; email: string }) => [p.student_id, p.email]), [["69000003", "mana.k@example.edu"]]);
     const audit = await pool.query<{ metadata: { counts: Record<string, number>; encoding: string } }>("SELECT metadata FROM audit_log WHERE event_type = 'roster.imported'");
@@ -128,6 +136,7 @@ test("Roster import: TIS-620 registrar file, preview statuses, apply, pending cl
     const gmail = await createUserWithSession(pool, "somjai.personal@gmail.example", "Somjai Personal");
     assert.equal((await post(gmail, "/api/sections/join", { code: joinCode, studentId: "69000005" })).statusCode, 200);
     assert.deepEqual(await member(gmail.userId), { roles: ["student"], student_id: "69000005", roster_name_th: "นางสาวสมใจ ดีงาม", roster_name_en: null, roster_email: "somjai.d@example.edu" });
+    assert.equal(await rosterId(gmail.userId), "69000005", "a claim by student ID is roster-backed too");
 
     type RosterRow = { user_id: string; student_id: string | null; roster_name_th: string | null; roster_email_mismatch: boolean | null; email: string | null };
     const staffView = (await get(teacher, `/api/sections/${sectionId}/memberships`)).json().memberships as RosterRow[];

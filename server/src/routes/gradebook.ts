@@ -6,8 +6,10 @@ import type { AppConfig } from "../config.js";
 import { toCsv } from "../csv.js";
 import { requireCurrentUser } from "../current-user.js";
 import type { DatabasePool } from "../db.js";
-import { withTransaction } from "../db.js";
+import { withTransaction, type DatabaseClient } from "../db.js";
 import { computeGrades } from "../gradebook.js";
+import { assignmentHeader, planGradebookImport } from "../gradebook-import.js";
+import { decodeRosterBytes, parseCsvRecords } from "../roster-file.js";
 
 const categorySchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -24,10 +26,18 @@ const assignmentSchema = z.object({
 const assignmentUpdateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   maxPoints: z.number().positive().optional(),
+  released: z.boolean().optional(),
 });
 const scoreSchema = z.object({ pointsEarned: z.number().min(0) });
 const bulkScoreSchema = z.object({
   scores: z.array(z.object({ userId: z.uuid(), pointsEarned: z.number().min(0) })).min(1),
+});
+// Gradebook CSV import (#2437): the file is sent as base64 twice -- for the preview and with the
+// confirmation -- and both run the same plan, as the roster import does.
+const MAX_IMPORT_BYTES = 512 * 1024;
+const importSchema = z.object({
+  fileBase64: z.string().min(1).max(Math.ceil((MAX_IMPORT_BYTES * 4) / 3) + 8),
+  encoding: z.enum(["auto", "utf-8", "tis-620"]).default("auto"),
 });
 
 function validationError(reply: FastifyReply, error: z.ZodError) {
@@ -61,12 +71,13 @@ interface AssignmentRow {
   category_id: string;
   name: string;
   max_points: string;
+  released_at: Date | null;
 }
 
 async function getAssignment(pool: DatabasePool, assignmentId: string) {
   const result = await pool.query<AssignmentRow & { section_id: string }>(
     `SELECT assignment.id, assignment.category_id, assignment.name, assignment.max_points,
-            category.section_id
+            assignment.released_at, category.section_id
      FROM assignments AS assignment
      JOIN categories AS category ON category.id = assignment.category_id
      WHERE assignment.id = $1`,
@@ -80,7 +91,13 @@ async function getAssignment(pool: DatabasePool, assignmentId: string) {
 // so their numbers can never drift apart.
 // Exported for reuse by Phase 2b-4's Stats Dashboard (src/routes/stats.ts), so its grade
 // computation is never a second, potentially-drifting copy of this one.
-export async function loadGradebookInputs(pool: DatabasePool, sectionId: string) {
+// `releasedOnly` restricts the computation to released Assignments, for any view a student sees
+// of their own grade (#2436), so an unreleased score never reaches them through a total.
+export async function loadGradebookInputs(
+  pool: DatabasePool,
+  sectionId: string,
+  options: { releasedOnly?: boolean } = {},
+) {
   const categoriesResult = await pool.query<CategoryRow>(
     "SELECT id, section_id, name, weight FROM categories WHERE section_id = $1 ORDER BY created_at",
     [sectionId],
@@ -90,8 +107,10 @@ export async function loadGradebookInputs(pool: DatabasePool, sectionId: string)
 
   const assignmentsResult = categoryIds.length
     ? await pool.query<AssignmentRow>(
-        "SELECT id, category_id, name, max_points FROM assignments WHERE category_id = ANY($1) ORDER BY created_at",
-        [categoryIds],
+        `SELECT id, category_id, name, max_points, released_at FROM assignments
+         WHERE category_id = ANY($1) AND ($2::boolean IS NOT TRUE OR released_at IS NOT NULL)
+         ORDER BY created_at`,
+        [categoryIds, options.releasedOnly ?? false],
       )
     : { rows: [] as AssignmentRow[] };
   const assignments = assignmentsResult.rows;
@@ -104,8 +123,13 @@ export async function loadGradebookInputs(pool: DatabasePool, sectionId: string)
       )
     : { rows: [] as { assignment_id: string; user_id: string; points_earned: string }[] };
 
-  const studentsResult = await pool.query<{ user_id: string; email: string; display_name: string }>(
-    `SELECT app_user.id AS user_id, app_user.email::text, app_user.display_name
+  const studentsResult = await pool.query<{
+    user_id: string;
+    email: string;
+    display_name: string;
+    student_id: string | null;
+  }>(
+    `SELECT app_user.id AS user_id, app_user.email::text, app_user.display_name, membership.student_id
      FROM memberships AS membership
      JOIN users AS app_user ON app_user.id = membership.user_id
      WHERE membership.section_id = $1
@@ -210,7 +234,8 @@ export async function registerGradebookRoutes(
     const { sectionId } = request.params as { sectionId: string };
     if (!(await requireManager(request, reply, sectionId))) return;
     const result = await pool.query(
-      `SELECT assignment.id, assignment.category_id, assignment.name, assignment.max_points
+      `SELECT assignment.id, assignment.category_id, assignment.name, assignment.max_points,
+              assignment.released_at
        FROM assignments AS assignment
        JOIN categories AS category ON category.id = assignment.category_id
        WHERE category.section_id = $1
@@ -229,7 +254,7 @@ export async function registerGradebookRoutes(
     if (!parsed.success) return validationError(reply, parsed.error);
 
     const result = await pool.query(
-      "INSERT INTO assignments (category_id, name, max_points) VALUES ($1, $2, $3) RETURNING id, category_id, name, max_points",
+      "INSERT INTO assignments (category_id, name, max_points) VALUES ($1, $2, $3) RETURNING id, category_id, name, max_points, released_at",
       [categoryId, parsed.data.name, parsed.data.maxPoints],
     );
     return reply.code(201).send({ assignment: result.rows[0] });
@@ -244,9 +269,13 @@ export async function registerGradebookRoutes(
     if (!parsed.success) return validationError(reply, parsed.error);
 
     const result = await pool.query(
-      `UPDATE assignments SET name = COALESCE($2, name), max_points = COALESCE($3, max_points), updated_at = now()
-       WHERE id = $1 RETURNING id, category_id, name, max_points`,
-      [assignmentId, parsed.data.name ?? null, parsed.data.maxPoints ?? null],
+      `UPDATE assignments SET name = COALESCE($2, name), max_points = COALESCE($3, max_points),
+              released_at = CASE WHEN $4::boolean IS NULL THEN released_at
+                                 WHEN $4 THEN COALESCE(released_at, now())
+                                 ELSE NULL END,
+              updated_at = now()
+       WHERE id = $1 RETURNING id, category_id, name, max_points, released_at`,
+      [assignmentId, parsed.data.name ?? null, parsed.data.maxPoints ?? null, parsed.data.released ?? null],
     );
     return reply.send({ assignment: result.rows[0] });
   });
@@ -374,13 +403,15 @@ export async function registerGradebookRoutes(
       await loadGradebookInputs(pool, sectionId);
     const categoryById = new Map(categories.map((category) => [category.id, category]));
 
+    // The import (#2437) reads this same shape back: Student ID and Student Email identify the
+    // row, and each Assignment column is found again through assignmentHeader().
     const header = [
       "Student Name",
       "Student Email",
-      ...assignments.map((assignment) => {
-        const category = categoryById.get(assignment.category_id);
-        return `${assignment.name} (${category?.name ?? ""})`;
-      }),
+      "Student ID",
+      ...assignments.map((assignment) =>
+        assignmentHeader(assignment.name, categoryById.get(assignment.category_id)?.name ?? ""),
+      ),
       ...categories.map((category) => `${category.name} %`),
       "Final Grade",
     ];
@@ -397,6 +428,7 @@ export async function registerGradebookRoutes(
       return [
         student.display_name,
         student.email,
+        student.student_id ?? "",
         ...assignmentCells,
         ...categoryCells,
         formatNumber(grade?.finalGrade ?? null),
@@ -405,5 +437,201 @@ export async function registerGradebookRoutes(
 
     const csv = toCsv([header, ...rows]);
     return reply.type("text/csv; charset=utf-8").send(csv);
+  });
+
+  // Everything the import plan needs, read through the given connection so the confirm step can
+  // re-plan inside its transaction.
+  async function loadImportInputs(db: DatabasePool | DatabaseClient, sectionId: string) {
+    const assignments = await db.query<{ id: string; name: string; max_points: string; category_name: string }>(
+      `SELECT assignment.id, assignment.name, assignment.max_points, category.name AS category_name
+       FROM assignments AS assignment
+       JOIN categories AS category ON category.id = assignment.category_id
+       WHERE category.section_id = $1
+       ORDER BY assignment.created_at`,
+      [sectionId],
+    );
+    const categories = await db.query<{ name: string }>("SELECT name FROM categories WHERE section_id = $1", [sectionId]);
+    const members = await db.query<{
+      user_id: string;
+      email: string;
+      display_name: string;
+      student_id: string | null;
+      roster_email: string | null;
+      roster_student_id: string | null;
+      roles: string[];
+    }>(
+      `SELECT app_user.id AS user_id, app_user.email::text, app_user.display_name, membership.student_id,
+              membership.roster_email::text, membership.roster_student_id, membership.roles
+       FROM memberships AS membership
+       JOIN users AS app_user ON app_user.id = membership.user_id
+       WHERE membership.section_id = $1
+       ORDER BY app_user.display_name`,
+      [sectionId],
+    );
+    const assignmentIds = assignments.rows.map((assignment) => assignment.id);
+    const scores = assignmentIds.length
+      ? await db.query<{ assignment_id: string; user_id: string; points_earned: string }>(
+          "SELECT assignment_id, user_id, points_earned FROM scores WHERE assignment_id = ANY($1)",
+          [assignmentIds],
+        )
+      : { rows: [] as { assignment_id: string; user_id: string; points_earned: string }[] };
+    return {
+      assignments: assignments.rows.map((assignment) => ({
+        id: assignment.id,
+        name: assignment.name,
+        categoryName: assignment.category_name,
+        maxPoints: Number(assignment.max_points),
+      })),
+      categoryNames: categories.rows.map((category) => category.name),
+      members: members.rows.map((member) => ({
+        userId: member.user_id,
+        email: member.email,
+        displayName: member.display_name,
+        studentId: member.student_id,
+        rosterEmail: member.roster_email,
+        rosterStudentId: member.roster_student_id,
+        roles: member.roles,
+      })),
+      scores: new Map(
+        scores.rows.map((score) => [`${score.assignment_id}:${score.user_id}`, Number(score.points_earned)]),
+      ),
+    };
+  }
+
+  function readImportFile(body: z.infer<typeof importSchema>) {
+    const bytes = Buffer.from(body.fileBase64, "base64");
+    if (bytes.length === 0) return { error: "EMPTY_FILE" as const };
+    if (bytes.length > MAX_IMPORT_BYTES) return { error: "FILE_TOO_LARGE" as const };
+    let decoded;
+    try {
+      decoded = decodeRosterBytes(bytes, body.encoding);
+    } catch {
+      return { error: "INVALID_ENCODING" as const };
+    }
+    return { decoded, records: parseCsvRecords(decoded.text) };
+  }
+
+  app.post("/api/sections/:sectionId/gradebook/import/preview", async (request, reply) => {
+    const { sectionId } = request.params as { sectionId: string };
+    if (!z.uuid().safeParse(sectionId).success) return reply.code(400).send({ error: "INVALID_REQUEST" });
+    if (!(await requireManager(request, reply, sectionId))) return;
+    const parsed = importSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
+    const file = readImportFile(parsed.data);
+    if ("error" in file) return reply.code(400).send({ error: file.error });
+    const plan = planGradebookImport({ records: file.records, ...(await loadImportInputs(pool, sectionId)) });
+    if (plan.error) return reply.code(400).send({ error: plan.error, headers: plan.headers });
+    return reply.send({ encoding: file.decoded.encoding, unmappedBytes: file.decoded.unmapped, ...plan });
+  });
+
+  app.post("/api/sections/:sectionId/gradebook/import", async (request, reply) => {
+    const { sectionId } = request.params as { sectionId: string };
+    if (!z.uuid().safeParse(sectionId).success) return reply.code(400).send({ error: "INVALID_REQUEST" });
+    const user = await requireManager(request, reply, sectionId);
+    if (!user) return;
+    const parsed = importSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(reply, parsed.error);
+    const file = readImportFile(parsed.data);
+    if ("error" in file) return reply.code(400).send({ error: file.error });
+
+    // Re-planned inside the transaction from the file and the current scores: the client never
+    // supplies the cells to write.
+    const plan = await withTransaction(pool, async (client) => {
+      const result = planGradebookImport({ records: file.records, ...(await loadImportInputs(client, sectionId)) });
+      if (result.error) return result;
+      for (const row of result.rows) {
+        if (row.status !== "change" || !row.userId) continue;
+        for (const change of row.changes) {
+          // points_earned only, like the bulk entry: a later activity/practice sync then sees an
+          // imported value over a synced cell as a hand edit.
+          await client.query(
+            `INSERT INTO scores (assignment_id, user_id, points_earned) VALUES ($1, $2, $3)
+             ON CONFLICT (assignment_id, user_id) DO UPDATE
+             SET points_earned = EXCLUDED.points_earned, updated_at = now()`,
+            [change.assignmentId, row.userId, change.to],
+          );
+        }
+      }
+      await client.query(
+        `INSERT INTO audit_log (actor_user_id, event_type, subject_type, subject_id, metadata)
+         VALUES ($1, 'gradebook.imported', 'section', $2, $3::jsonb)`,
+        [
+          user.id,
+          sectionId,
+          JSON.stringify({
+            encoding: file.decoded.encoding,
+            counts: result.counts,
+            columns: result.matchedColumns.map((column) => column.header),
+            unknownColumns: result.unknownColumns,
+          }),
+        ],
+      );
+      return result;
+    });
+    if (plan.error) return reply.code(400).send({ error: plan.error, headers: plan.headers });
+    return reply.send({ counts: plan.counts });
+  });
+
+  // A member's own grades (#2436). Only released Assignments are visible, and the category
+  // percentages and final grade are computed from released Assignments alone -- otherwise an
+  // unreleased score could be worked back out of the totals. Always scoped to the caller: there
+  // is no userId parameter, so one student can never ask for another's grades.
+  app.get("/api/sections/:sectionId/my-grades", async (request, reply) => {
+    const { sectionId } = request.params as { sectionId: string };
+    const user = await requireCurrentUser(request, reply, pool, config);
+    if (!user) return;
+    const roles = await getSectionRoles(pool, user.id, sectionId);
+    if (roles.length === 0) return reply.code(403).send({ error: "FORBIDDEN" });
+
+    const categoriesResult = await pool.query<CategoryRow>(
+      "SELECT id, section_id, name, weight FROM categories WHERE section_id = $1 ORDER BY created_at",
+      [sectionId],
+    );
+    const categories = categoriesResult.rows;
+    const assignmentsResult = await pool.query<AssignmentRow & { points_earned: string | null }>(
+      `SELECT assignment.id, assignment.category_id, assignment.name, assignment.max_points,
+              assignment.released_at, score.points_earned
+       FROM assignments AS assignment
+       JOIN categories AS category ON category.id = assignment.category_id
+       LEFT JOIN scores AS score ON score.assignment_id = assignment.id AND score.user_id = $2
+       WHERE category.section_id = $1 AND assignment.released_at IS NOT NULL
+       ORDER BY assignment.created_at`,
+      [sectionId, user.id],
+    );
+    const assignments = assignmentsResult.rows;
+
+    const [grade] = computeGrades(
+      categories.map((category) => ({ id: category.id, weight: Number(category.weight) })),
+      assignments.map((assignment) => ({
+        id: assignment.id,
+        categoryId: assignment.category_id,
+        maxPoints: Number(assignment.max_points),
+      })),
+      assignments
+        .filter((assignment) => assignment.points_earned !== null)
+        .map((assignment) => ({
+          assignmentId: assignment.id,
+          userId: user.id,
+          pointsEarned: Number(assignment.points_earned),
+        })),
+      [user.id],
+    );
+
+    return reply.send({
+      categories: categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        weight: Number(category.weight),
+        percent: grade?.categoryPercentages.get(category.id) ?? null,
+      })),
+      assignments: assignments.map((assignment) => ({
+        id: assignment.id,
+        categoryId: assignment.category_id,
+        name: assignment.name,
+        maxPoints: Number(assignment.max_points),
+        pointsEarned: assignment.points_earned === null ? null : Number(assignment.points_earned),
+      })),
+      finalGrade: grade?.finalGrade ?? null,
+    });
   });
 }

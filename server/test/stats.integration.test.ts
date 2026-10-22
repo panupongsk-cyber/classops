@@ -310,7 +310,22 @@ test(
       });
       assert.equal(selfView.statusCode, 200);
       assert.equal(selfView.json().attendanceRate, 0.5);
-      assert.equal(selfView.json().finalGrade, 100);
+      // HW1 is not released yet, so the student's own view has no grade (#2436).
+      assert.equal(selfView.json().finalGrade, null);
+
+      const release = await app.inject({
+        method: "PATCH",
+        url: `/api/assignments/${assignmentId}`,
+        headers: { cookie: teacher.cookie, ...origin },
+        payload: { released: true },
+      });
+      assert.equal(release.statusCode, 200);
+      const releasedSelfView = await app.inject({
+        method: "GET",
+        url: `/api/sections/${sectionId}/stats/students/${student.userId}`,
+        headers: { cookie: student.cookie },
+      });
+      assert.equal(releasedSelfView.json().finalGrade, 100);
 
       const otherStudentForbidden = await app.inject({
         method: "GET",

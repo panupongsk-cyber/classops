@@ -30,6 +30,26 @@ export function deleteAssignment(assignmentId) {
   return apiRequest(`/api/assignments/${assignmentId}`, { method: 'DELETE' })
 }
 
+export function setAssignmentReleased(assignmentId, released) {
+  return apiRequest(`/api/assignments/${assignmentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ released }),
+  })
+}
+
+// Gradebook CSV import (#2437): the same file goes to the preview and, on confirm, to the import.
+export function previewGradebookImport(sectionId, payload) {
+  return apiRequest(`/api/sections/${sectionId}/gradebook/import/preview`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function applyGradebookImport(sectionId, payload) {
+  return apiRequest(`/api/sections/${sectionId}/gradebook/import`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function getMyGrades(sectionId) {
+  return apiRequest(`/api/sections/${sectionId}/my-grades`)
+}
+
 export function getAssignmentScores(assignmentId) {
   return apiRequest(`/api/assignments/${assignmentId}/scores`)
 }

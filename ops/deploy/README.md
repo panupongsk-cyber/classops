@@ -28,10 +28,15 @@ active one):
 | `804ac17` | 2026-10-13 | Practice explanations end to end (PS-TASK-20261013-1777): an `explanation` field (English and Thai) runs from the item bank through the exporter and package validator into `practice_questions`, with migration `019_practice_explanations.sql`, and the UI shows it only after a reveal, under the label "คำอธิบายเสริม ไม่ใช่ของ ITPEC". The nine practice sessions now carry explanations for all 900 questions. Evidence is on #1777; production acceptance of the label is on #1957 (row 4). |
 | `76b4858` | 2026-10-20 | The private question library (PS-TASK-20261017-1954, -1955, -1956): a global catalogue independent of Section membership, search with facets and persistent reading context, reading that keeps source key notes private until reveal, and an audited publication/restoration path, with migrations `020_question_library.sql` and `021_library_releases.sql`. Published revision `7ec29a76…` holds 33 papers, 1,869 questions and 904 figures, restricted to an explicit user allowlist. Evidence is on #1954, #1955, #1956 and PR #2049; acceptance is on #1957. |
 | `3aef248` | 2026-10-20 | Guarded Course and Section deletion (PS-TASK-20261020-2264): a Section refuses to delete while it holds learning data or another member, answering `409 SECTION_NOT_EMPTY` with a per-resource blocker list, and a Course delete is checked Section by Section; both write `section.deleted` / `course.deleted` audit entries, and the browser gains a Section danger zone and a per-course delete on the admin Courses page. No migration. Evidence is on #2264 and acceptance on #2275. |
+| `cfa1981` | 2026-10-21 | Frontend only (PS-TASK-20261021-2318, -2322; panupongsk-cyber/classops#33, #34): the Question Library and practice QuestionCard redesign, and the high-contrast theme and visual identity overhaul. No migration. Row added afterwards by PS-TASK-20261022-2412 from the public PR titles and the release directory date. |
+| `3f6517c` | 2026-10-22 | Python code exercises per Section (PS-TASK-20261022-2374, PR #2375, panupongsk-cyber/classops#35): teacher-authored exercises with visible tests, student Run and Submit checked server-side through Piston (`PS-SVC-piston`, set by `PISTON_URL` in the secrets env file), and the teacher's pass-count list, with migration `022_code_exercises.sql`. Evidence is on #2374. |
 
-`3aef248` is the active release, and `76b4858` is its rollback target. A code-only rollback
+`3f6517c` is the active release, and `cfa1981` is its rollback target. A code-only rollback
 leaves the migrations and the imported content in place, and the older code ignores the tables it
 doesn't know.
+- If you roll back past `3f6517c`, the code-exercise routes and UI disappear; migration 022's
+  tables and any exercises and submissions stay in the database, and a later redeploy restores
+  them. Leaving `PISTON_URL` set is harmless to older code.
 - If you roll back past `3aef248`, the delete routes and their UI disappear. Nothing that was
   already deleted comes back: the delete commits before it reports success.
 - If you roll back past `76b4858`, the library routes and UI disappear; migrations 020 and 021 and
@@ -78,6 +83,9 @@ doesn't know.
   - Phase 4 games: a data-flow diagram (STRIDE), a policy builder (Least-Privilege Lab), and a
     recipe builder with a local preview (CyberChef)
 - roster import from a student-list CSV, with pending pre-enrollment
+- Python code exercises per Section: a teacher sets visible tests and opens the exercise; a
+  student edits code, runs it and submits it, checked server-side through Piston; the teacher sees
+  each student's latest pass count and code
 - ITPE IP (IT Passport) exam practice, which a teacher enables per Section:
   - browse, practice, and quick quiz
   - a timed mock exam with a pass estimate

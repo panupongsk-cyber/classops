@@ -368,8 +368,11 @@ test(
       assert.equal(student2Row.finalGrade, 60);
       const student2Line = csvLines.find((line) => line.startsWith("Student Two,"));
       const student2Cells = student2Line?.split(",") ?? [];
-      // The Homework column (HW1) is blank for student2 -- never graded.
+      // Student ID (column 2) is blank -- no roster record; the Homework column (HW1, column 3) is
+      // blank for student2 -- never graded.
+      assert.equal(header[2], "Student ID");
       assert.equal(student2Cells[2], "");
+      assert.equal(student2Cells[3], "");
     } finally {
       await app.close();
     }
