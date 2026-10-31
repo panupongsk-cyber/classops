@@ -67,6 +67,28 @@ export function checkIn(sessionId, value) {
   })
 }
 
+export function getFaceChallenge(sessionId) {
+  return apiRequest(`/api/sessions/${sessionId}/face-challenge`)
+}
+
+export function checkInFace(sessionId, nonce, embedding) {
+  return apiRequest(`/api/sessions/${sessionId}/check-in`, {
+    method: 'POST',
+    body: JSON.stringify({ face: { nonce, embedding } }),
+  })
+}
+
+export function getFaceEnrollment() {
+  return apiRequest('/api/me/face-enrollment')
+}
+
+export function putFaceEnrollment(embeddings, liveness) {
+  return apiRequest('/api/me/face-enrollment', {
+    method: 'PUT',
+    body: JSON.stringify({ embeddings, ...(liveness ? { liveness } : {}) }),
+  })
+}
+
 // Fixed at build time, mirrored exactly from server/src/routes/sessions.ts's EMOJI_PALETTE so the
 // student's tappable options (including decoys) match what the server will actually accept.
 export const EMOJI_PALETTE = [

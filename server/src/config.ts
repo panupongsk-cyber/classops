@@ -4,6 +4,8 @@ import { isIP } from "node:net";
 
 import { z } from "zod";
 
+import { FACE_CHALLENGE_TTL_SECONDS_DEFAULT, FACE_MATCH_THRESHOLD_DEFAULT } from "./face.js";
+
 // TRUST_PROXY: "false" (default), "true", or a comma-separated list of proxy addresses/CIDRs. With a
 // list, the client address is the right-most X-Forwarded-For entry not in the list, so a
 // client-supplied prefix cannot choose it. (A hop count is not accepted: Fastify 5.12 ignores it
@@ -65,6 +67,9 @@ const baseSchema = z.object({
   ADMIN_GOOGLE_EMAIL: z.email(),
   // Piston code-execution API base URL (server-side only; never sent to the browser).
   PISTON_URL: optionalNonEmpty(z.url()),
+  // Face check-in: cosine-similarity acceptance threshold and the single-use challenge TTL.
+  FACE_MATCH_THRESHOLD: z.coerce.number().min(0).max(1).default(FACE_MATCH_THRESHOLD_DEFAULT),
+  FACE_CHALLENGE_TTL_SECONDS: z.coerce.number().int().min(10).max(600).default(FACE_CHALLENGE_TTL_SECONDS_DEFAULT),
   LIBRARY_USER_IDS: z.string().default("").transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)).pipe(z.array(z.uuid())),
 });
 
@@ -94,9 +99,14 @@ function resolveOAuthConfig(
   return { clientId: clientId as string, clientSecret: clientSecret as string, redirectUri: redirectUri as string };
 }
 
-export type AppConfig = Omit<ReturnType<typeof loadAppConfig>, "libraryUserIds" | "pistonUrl"> & {
+export type AppConfig = Omit<
+  ReturnType<typeof loadAppConfig>,
+  "libraryUserIds" | "pistonUrl" | "faceMatchThreshold" | "faceChallengeTtlSeconds"
+> & {
   libraryUserIds?: readonly string[];
   pistonUrl?: string | null;
+  faceMatchThreshold?: number;
+  faceChallengeTtlSeconds?: number;
 };
 
 export function loadAppConfig() {
@@ -108,6 +118,8 @@ export function loadAppConfig() {
   return {
     libraryUserIds: env.LIBRARY_USER_IDS,
     pistonUrl: env.PISTON_URL ? env.PISTON_URL.replace(/\/+$/, "") : null,
+    faceMatchThreshold: env.FACE_MATCH_THRESHOLD,
+    faceChallengeTtlSeconds: env.FACE_CHALLENGE_TTL_SECONDS,
     nodeEnv: env.NODE_ENV,
     host: env.HOST,
     port: env.PORT,

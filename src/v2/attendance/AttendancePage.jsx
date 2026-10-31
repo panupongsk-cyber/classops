@@ -290,6 +290,15 @@ function SessionsTable({ sessions, onChanged }) {
                     >
                       {t('openViaEmoji')}
                     </button>
+                    <button
+                      type="button"
+                      className="v2-btn v2-btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: '.75rem', marginLeft: 6 }}
+                      disabled={openingId === session.id}
+                      onClick={() => handleOpen(session.id, 'face')}
+                    >
+                      {t('openViaFace')}
+                    </button>
                   </>
                 )}
                 {status === 'open' && (

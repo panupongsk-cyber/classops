@@ -21,6 +21,8 @@
     "v2:prod:down": "docker compose -f compose.v2.prod.yml --env-file \"$CLASSOPS_ENV_FILE\" down"
   },
   "dependencies": {
+    "@tensorflow/tfjs": "^1.7.4",
+    "face-api.js": "^0.22.2",
     "qrcode.react": "^3.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

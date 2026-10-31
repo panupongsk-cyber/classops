@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useV2Auth } from '../auth/V2AuthContext.jsx'
 import Notice from '../components/Notice.jsx'
 
@@ -14,6 +14,7 @@ export default function AccountPage() {
       <p className="v2-subtitle">{user.email}</p>
       <Notice kind="success">บัญชีและอีเมลพร้อมใช้งานแล้ว</Notice>
       <Notice>ขณะนี้เป็นช่วงทดสอบระบบสมาชิก v2 ข้อมูลรายวิชาและสิทธิ์จาก Firebase ยังไม่ได้ย้ายเข้ามา</Notice>
+      <Link to="/v2/face/enroll" className="v2-secondary" style={{ display: 'block', textAlign: 'center', marginBottom: 8 }}>ตั้งค่าใบหน้าสำหรับเช็คชื่อ</Link>
       <button type="button" className="v2-secondary" onClick={signOut}>ออกจากระบบ</button>
     </section>
   </main>

@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import AttendancePage from './attendance/AttendancePage.jsx'
 import CheckInLandingPage from './attendance/CheckInLandingPage.jsx'
 import SessionLivePage from './attendance/SessionLivePage.jsx'
+import FaceEnrollmentPage from './face/FaceEnrollmentPage.jsx'
 import FeedPage from './feed/FeedPage.jsx'
 import AssignmentScoresPage from './gradebook/AssignmentScoresPage.jsx'
 import GradebookPage from './gradebook/GradebookPage.jsx'
@@ -58,6 +59,7 @@ export default function V2App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/v2/checkin" element={<CheckInLandingPage />} />
       <Route path="/v2/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
+      <Route path="/v2/face/enroll" element={<ProtectedRoute><FaceEnrollmentPage /></ProtectedRoute>} />
       <Route path="/v2/library" element={<ShellRoute><LibraryPage /></ShellRoute>} />
       <Route path="/v2/library/:examId" element={<ShellRoute><LibraryPage /></ShellRoute>} />
       <Route path="/v2/library/:examId/:itemId" element={<ShellRoute><LibraryPage /></ShellRoute>} />
