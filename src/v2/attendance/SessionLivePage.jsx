@@ -39,6 +39,8 @@ export default function SessionLivePage() {
       } else if (currentSession.check_in_method === 'emoji') {
         const emojiResult = await getCurrentEmoji(sessionId)
         setDisplay({ emoji: emojiResult.emoji })
+      } else if (currentSession.check_in_method === 'face') {
+        setDisplay({ face: true })
       }
     }
   }, [sessionId])
@@ -115,6 +117,12 @@ export default function SessionLivePage() {
             <div style={{ textAlign: 'center', marginBottom: 32 }}>
               <p style={{ color: '#94a3b8', marginBottom: 16 }}>{t('emojiHeading')}</p>
               <div style={{ fontSize: '9rem', lineHeight: 1 }}>{display.emoji}</div>
+            </div>
+          )}
+          {display?.face && (
+            <div style={{ textAlign: 'center', marginBottom: 32 }}>
+              <p style={{ color: '#94a3b8', marginBottom: 16 }}>{t('faceHeading')}</p>
+              <div style={{ fontSize: '3rem', lineHeight: 1 }}>🙂</div>
             </div>
           )}
         </>

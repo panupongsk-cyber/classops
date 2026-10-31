@@ -8,6 +8,14 @@ import type { AppConfig } from "../config.js";
 import { requireCurrentUser } from "../current-user.js";
 import type { DatabasePool } from "../db.js";
 import { withTransaction } from "../db.js";
+import {
+  FACE_CHALLENGE_TTL_SECONDS_DEFAULT,
+  FACE_EMBEDDING_DIM,
+  FACE_MATCH_THRESHOLD_DEFAULT,
+  cosineSimilarity,
+  generateFaceNonce,
+  randomFaceChallenge,
+} from "../face.js";
 
 // Rotation window for QR check-in codes (product spec: 15-30s, defended against screenshot
 // sharing, not exact-precision timing). Lazy rotation means a code can live slightly longer than
@@ -45,8 +53,14 @@ const createSessionSchema = z
     message: "scheduledStart must be before scheduledEnd",
     path: ["scheduledEnd"],
   });
-const openSessionSchema = z.object({ checkInMethod: z.enum(["qr", "emoji"]) });
+const openSessionSchema = z.object({ checkInMethod: z.enum(["qr", "emoji", "face"]) });
 const checkInSchema = z.object({ value: z.string().trim().min(1).max(64) });
+const faceCheckInSchema = z.object({
+  face: z.object({
+    nonce: z.string().min(1).max(128),
+    embedding: z.array(z.number()).length(FACE_EMBEDDING_DIM),
+  }),
+});
 
 function validationError(reply: FastifyReply, error: z.ZodError) {
   return reply.code(400).send({
@@ -79,7 +93,7 @@ interface SessionRow {
   section_id: string;
   scheduled_start: string;
   scheduled_end: string;
-  check_in_method: "qr" | "emoji" | null;
+  check_in_method: "qr" | "emoji" | "face" | null;
   opened_at: string | null;
   closed_at: string | null;
   qr_code: string | null;
@@ -99,6 +113,49 @@ async function getSession(pool: DatabasePool, sessionId: string) {
 
 function isOpen(session: SessionRow) {
   return session.opened_at !== null && session.closed_at === null;
+}
+
+// Returns an error code on failure, or null when the face check-in is accepted. Consumes the nonce
+// first (single-use), so a failed similarity match still burns it -- a legitimate user re-requests a
+// fresh challenge, and a captured payload cannot be replayed against many embeddings.
+async function verifyFaceCheckIn(
+  pool: DatabasePool,
+  session: SessionRow,
+  userId: string,
+  face: { nonce: string; embedding: number[] },
+  threshold: number,
+): Promise<string | null> {
+  const consumed = await pool.query(
+    `UPDATE face_checkin_nonces
+     SET used_at = now()
+     WHERE session_id = $1 AND user_id = $2 AND nonce = $3
+       AND used_at IS NULL AND expires_at > now()
+     RETURNING id`,
+    [session.id, userId, face.nonce],
+  );
+  if (!consumed.rowCount) {
+    const existing = await pool.query<{ used_at: string | null }>(
+      `SELECT used_at FROM face_checkin_nonces
+       WHERE session_id = $1 AND user_id = $2 AND nonce = $3`,
+      [session.id, userId, face.nonce],
+    );
+    if (existing.rows[0]?.used_at) return "NONCE_USED";
+    return "NONCE_INVALID";
+  }
+
+  const enrollment = await pool.query<{ embeddings: number[][] }>(
+    "SELECT embeddings FROM face_enrollments WHERE user_id = $1",
+    [userId],
+  );
+  const embeddings = enrollment.rows[0]?.embeddings;
+  if (!embeddings || embeddings.length === 0) return "NOT_ENROLLED";
+
+  let best = -1;
+  for (const stored of embeddings) {
+    const similarity = cosineSimilarity(stored, face.embedding);
+    if (similarity > best) best = similarity;
+  }
+  return best < threshold ? "FACE_MISMATCH" : null;
 }
 
 export async function registerSessionRoutes(
@@ -365,6 +422,16 @@ export async function registerSessionRoutes(
           [sessionId, code, QR_ROTATION_SECONDS],
         );
       }
+      if (parsed.data.checkInMethod === "face") {
+        return client.query(
+          `UPDATE class_sessions
+           SET opened_at = now(), closed_at = null, check_in_method = 'face',
+               qr_code = null, qr_code_expires_at = null, active_emoji = null, updated_at = now()
+           WHERE id = $1
+           RETURNING id, check_in_method, opened_at, qr_code, qr_code_expires_at, active_emoji`,
+          [sessionId],
+        );
+      }
       const emoji = EMOJI_PALETTE[randomInt(EMOJI_PALETTE.length)];
       return client.query(
         `UPDATE class_sessions
@@ -429,6 +496,43 @@ export async function registerSessionRoutes(
     return reply.send({ emoji: session.active_emoji });
   });
 
+  // Issues a single-use nonce + random liveness challenge, bound to the caller and this session.
+  // Any member may request one (like the "open session" poll); a non-member cannot.
+  app.get(
+    "/api/sessions/:sessionId/face-challenge",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const user = await requireCurrentUser(request, reply, pool, config);
+      if (!user) return;
+      const { sessionId } = request.params as { sessionId: string };
+      const session = await getSession(pool, sessionId);
+      if (!session) return reply.code(404).send({ error: "SESSION_NOT_FOUND" });
+
+      if (!user.isPlatformAdmin) {
+        const roles = await getSectionRoles(pool, user.id, session.section_id);
+        if (roles.length === 0) return reply.code(403).send({ error: "FORBIDDEN" });
+      }
+      if (!isOpen(session)) return reply.code(409).send({ error: "SESSION_NOT_OPEN" });
+      if (session.check_in_method !== "face") {
+        return reply.code(400).send({ error: "FACE_NOT_ACTIVE" });
+      }
+
+      const nonce = generateFaceNonce();
+      const challenge = randomFaceChallenge();
+      const ttlSeconds = config.faceChallengeTtlSeconds ?? FACE_CHALLENGE_TTL_SECONDS_DEFAULT;
+      const result = await pool.query<{ expires_at: string }>(
+        `INSERT INTO face_checkin_nonces (session_id, user_id, nonce, challenge, expires_at)
+         VALUES ($1, $2, $3, $4, now() + ($5 * interval '1 second'))
+         ON CONFLICT (session_id, user_id) DO UPDATE
+         SET nonce = EXCLUDED.nonce, challenge = EXCLUDED.challenge,
+             expires_at = EXCLUDED.expires_at, used_at = null, created_at = now()
+         RETURNING expires_at`,
+        [session.id, user.id, nonce, challenge, ttlSeconds],
+      );
+      return reply.send({ nonce, challenge, expiresAt: result.rows[0]?.expires_at });
+    },
+  );
+
   app.get("/api/sessions/:sessionId/roster", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
     const session = await requireSessionManager(request, reply, sessionId);
@@ -457,8 +561,6 @@ export async function registerSessionRoutes(
       const user = await requireCurrentUser(request, reply, pool, config);
       if (!user) return;
       const { sessionId } = request.params as { sessionId: string };
-      const parsed = checkInSchema.safeParse(request.body);
-      if (!parsed.success) return validationError(reply, parsed.error);
 
       const session = await getSession(pool, sessionId);
       if (!session) return reply.code(404).send({ error: "SESSION_NOT_FOUND" });
@@ -471,15 +573,31 @@ export async function registerSessionRoutes(
 
       // Identity checked in is always the authenticated caller -- never taken from the body.
       if (session.check_in_method === "qr") {
+        const parsed = checkInSchema.safeParse(request.body);
+        if (!parsed.success) return validationError(reply, parsed.error);
         const expired =
           !session.qr_code_expires_at || new Date(session.qr_code_expires_at) <= new Date();
         if (expired || parsed.data.value !== session.qr_code) {
           return reply.code(400).send({ error: "INVALID_CODE" });
         }
       } else if (session.check_in_method === "emoji") {
+        const parsed = checkInSchema.safeParse(request.body);
+        if (!parsed.success) return validationError(reply, parsed.error);
         if (parsed.data.value !== session.active_emoji) {
           return reply.code(400).send({ error: "INVALID_EMOJI" });
         }
+      } else if (session.check_in_method === "face") {
+        const parsed = faceCheckInSchema.safeParse(request.body);
+        if (!parsed.success) return validationError(reply, parsed.error);
+        const threshold = config.faceMatchThreshold ?? FACE_MATCH_THRESHOLD_DEFAULT;
+        const faceError = await verifyFaceCheckIn(
+          pool,
+          session,
+          user.id,
+          parsed.data.face,
+          threshold,
+        );
+        if (faceError) return reply.code(400).send({ error: faceError });
       } else {
         return reply.code(409).send({ error: "SESSION_NOT_OPEN" });
       }

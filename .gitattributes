@@ -1,0 +1,6 @@
+# The public deploy repository (panupongsk-cyber/classops) carries no LFS config of its own, so the
+# app ships this rule: the face-api.js model weights under public/models/ are binary and must stay
+# Git-LFS-tracked wherever this source is cloned. Keep this in sync with the repository-root
+# .gitattributes.
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.shard filter=lfs diff=lfs merge=lfs -text

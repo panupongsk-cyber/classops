@@ -14,6 +14,7 @@ import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCourseRoutes } from "./routes/courses.js";
 import { registerExitTicketRoutes } from "./routes/exit-tickets.js";
+import { registerFaceEnrollmentRoutes } from "./routes/face-enrollment.js";
 import { registerFeedRoutes } from "./routes/feed.js";
 import { registerGoogleOAuthRoutes } from "./routes/google-oauth.js";
 import { registerGradebookRoutes } from "./routes/gradebook.js";
@@ -126,6 +127,7 @@ export async function buildApp(dependencies: {
   await registerPracticeRoutes(app, { pool, config });
   await registerPracticeAssignmentRoutes(app, { pool, config });
   await registerSessionRoutes(app, { pool, config });
+  await registerFaceEnrollmentRoutes(app, { pool, config });
   await registerExitTicketRoutes(app, { pool, config });
   await registerRandomPickerRoutes(app, { pool, config });
   await registerGradebookRoutes(app, { pool, config });

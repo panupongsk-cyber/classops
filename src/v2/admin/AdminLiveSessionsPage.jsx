@@ -184,7 +184,7 @@ export default function AdminLiveSessionsPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.8rem', color: 'var(--v2-ink-muted)', marginBottom: 14 }}>
                     <div>
                       {t('adminLiveMethod')}: <strong style={{ color: 'var(--v2-ink)' }}>
-                        {s.checkInMethod === 'qr' ? '📱 QR Code' : s.checkInMethod === 'emoji' ? `😀 Emoji (${s.activeEmoji || ''})` : 'Manual'}
+                        {s.checkInMethod === 'qr' ? '📱 QR Code' : s.checkInMethod === 'emoji' ? `😀 Emoji (${s.activeEmoji || ''})` : s.checkInMethod === 'face' ? '🙂 Face' : 'Manual'}
                       </strong>
                     </div>
                     <div>

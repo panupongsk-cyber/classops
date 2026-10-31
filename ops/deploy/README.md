@@ -31,10 +31,15 @@ active one):
 | `cfa1981` | 2026-10-21 | Frontend only (PS-TASK-20261021-2318, -2322; panupongsk-cyber/classops#33, #34): the Question Library and practice QuestionCard redesign, and the high-contrast theme and visual identity overhaul. No migration. Row added afterwards by PS-TASK-20261022-2412 from the public PR titles and the release directory date. |
 | `3f6517c` | 2026-10-22 | Python code exercises per Section (PS-TASK-20261022-2374, PR #2375, panupongsk-cyber/classops#35): teacher-authored exercises with visible tests, student Run and Submit checked server-side through Piston (`PS-SVC-piston`, set by `PISTON_URL` in the secrets env file), and the teacher's pass-count list, with migration `022_code_exercises.sql`. Evidence is on #2374. |
 | `720fb95` | 2026-10-22 | Student grades and gradebook import (PS-TASK-20261022-2436, -2437, -2447; PRs #2441, #2443, #2448; panupongsk-cyber/classops#36): "My grades" with a per-Assignment release switch, so students see released work only, totals included; gradebook CSV import with preview and confirm, matching by student ID then email; and a preview warning for rows matched only by a learner-typed ID. Migrations `023_assignment_release.sql` and `024_membership_roster_student_id.sql`. Backup `classops-20261022T123643Z` before the change. Evidence is on #2449. |
+| `4e73991` | 2026-10-22 | Class Feed attachments, feed polling, and the Section practice switch (PS-TASK-20261022-1995, -2438, -2439; PRs #2453, #2458, #2459; panupongsk-cyber/classops#37): staff attach PDF, image, Office or text files (10 MB, 5 per post) stored in PostgreSQL, members download them streamed; an open feed refreshes in place every ~20 s; the practice switch also on the Section page, read-only for TAs; and the API's error handler now covers every route, so no raw database text reaches a caller. Migration `025_post_attachments.sql`; the gateway image is rebuilt (an 11 MB upload location with request buffering off, streamed downloads, 1 MB elsewhere). Backup `classops-20261022T153711Z` before the change. Evidence is on #2460. |
 
-`720fb95` is the active release, and `3f6517c` is its rollback target. A code-only rollback
+`4e73991` is the active release, and `720fb95` is its rollback target. A code-only rollback
 leaves the migrations and the imported content in place, and the older code ignores the tables it
 doesn't know.
+- If you roll back past `4e73991`, feed attachments, feed polling, and the Section-page practice
+  switch disappear; migration 025's table and any uploaded files stay in the database, and a later
+  redeploy shows them again. The older gateway caps every upload at 1 MB. The older API also
+  returns to Fastify's default error handler on early routes (raw database error text on a 5xx).
 - If you roll back past `720fb95`, "My grades", the release switch, and the gradebook CSV import
   disappear, and the export loses its `Student ID` column. Migrations 023 and 024 stay: older code
   ignores `assignments.released_at` and `memberships.roster_student_id`, and students again see no
@@ -80,7 +85,8 @@ doesn't know.
 - the gradebook, with CSV import (preview, then confirm) and a Student ID column in the export
 - "My grades" for students: released Assignments only, with category and final totals from
   released work; managers release or hide each Assignment
-- the class feed
+- the class feed, with staff file attachments (PDF, images, Office, text; 10 MB, 5 per post) and
+  in-place updates every ~20 s while the page is open
 - stats
 - learning activities:
   - play, and the learner's own results

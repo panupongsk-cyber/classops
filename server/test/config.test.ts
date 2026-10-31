@@ -123,3 +123,19 @@ test("PISTON_URL strips a trailing slash", () => {
 test("an invalid PISTON_URL throws", () => {
   assert.throws(() => withEnv({ PISTON_URL: "not a url" }, () => loadAppConfig()));
 });
+
+test("FACE_MATCH_THRESHOLD and FACE_CHALLENGE_TTL_SECONDS default and parse", () => {
+  const config = withEnv({}, () => loadAppConfig());
+  assert.equal(config.faceMatchThreshold, 0.6);
+  assert.equal(config.faceChallengeTtlSeconds, 60);
+  const overridden = withEnv(
+    { FACE_MATCH_THRESHOLD: "0.7", FACE_CHALLENGE_TTL_SECONDS: "120" },
+    () => loadAppConfig(),
+  );
+  assert.equal(overridden.faceMatchThreshold, 0.7);
+  assert.equal(overridden.faceChallengeTtlSeconds, 120);
+});
+
+test("an out-of-range FACE_MATCH_THRESHOLD throws", () => {
+  assert.throws(() => withEnv({ FACE_MATCH_THRESHOLD: "1.5" }, () => loadAppConfig()));
+});
